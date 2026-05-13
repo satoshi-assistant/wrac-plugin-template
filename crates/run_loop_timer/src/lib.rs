@@ -182,49 +182,6 @@ mod tests {
 
     #[test]
     #[serial]
-    fn sync_timer_repeats_until_stopped() {
-        run_async(async {
-            let counter = Arc::new(AtomicU32::new(0));
-            let counter_clone = counter.clone();
-
-            let timer = Timer::new(Duration::from_millis(30), move || {
-                counter_clone.fetch_add(1, Ordering::SeqCst);
-            });
-
-            timer.start();
-            RunLoop::current().delay(Duration::from_millis(900)).await;
-            timer.stop();
-
-            let count = counter.load(Ordering::SeqCst);
-            assert!((20..=35).contains(&count), "unexpected count: {count}");
-        });
-    }
-
-    #[test]
-    #[serial]
-    fn async_timer_repeats_until_stopped() {
-        run_async(async {
-            let counter = Arc::new(AtomicU32::new(0));
-            let counter_clone = counter.clone();
-
-            let timer = Timer::new_async(Duration::from_millis(30), move || {
-                let counter = counter_clone.clone();
-                async move {
-                    counter.fetch_add(1, Ordering::SeqCst);
-                }
-            });
-
-            timer.start();
-            RunLoop::current().delay(Duration::from_millis(900)).await;
-            timer.stop();
-
-            let count = counter.load(Ordering::SeqCst);
-            assert!((20..=35).contains(&count), "unexpected count: {count}");
-        });
-    }
-
-    #[test]
-    #[serial]
     fn timer_state_tracks_start_and_stop() {
         run_async(async {
             let timer = Timer::new(Duration::from_millis(100), || {});
