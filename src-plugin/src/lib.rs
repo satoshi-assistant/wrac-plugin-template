@@ -16,6 +16,13 @@
 //! - `gui.rs`    : WebView ベースの GUI runtime (HTML/JS で UI を作る)。
 //! - `commands.rs` : WebView frontend から呼べる Rust command。
 
+#[cfg(debug_assertions)]
+use assert_no_alloc::*;
+
+#[cfg(debug_assertions)]
+#[global_allocator]
+static ALLOC_DISABLER: AllocDisabler = AllocDisabler;
+
 mod audio;
 mod commands;
 mod gui;

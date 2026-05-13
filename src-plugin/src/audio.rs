@@ -45,7 +45,23 @@ impl Processor for WracGainAudioProcessor {
     /// このサンプルでは parameter event の発生時刻ごとに buffer を区切り、
     /// 区間ごとに当時の gain を掛けることで「sample 精度の automation」を
     /// 実現している (event 間は gain 一定として扱う)。
-    fn process(&mut self, mut context: ProcessContext<'_>) -> PluginResult<ProcessStatus> {
+    fn process(&mut self, context: ProcessContext<'_>) -> PluginResult<ProcessStatus> {
+        #[cfg(debug_assertions)]
+        {
+            // 違反時は allocator error と backtrace で即座に失敗させる。
+            // DAW や adapter が panic を握りつぶしても allocation 違反を見逃さないため。
+            assert_no_alloc::assert_no_alloc(|| self.process_no_alloc(context))
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            self.process_no_alloc(context)
+        }
+    }
+}
+
+impl WracGainAudioProcessor {
+    fn process_no_alloc(&mut self, mut context: ProcessContext<'_>) -> PluginResult<ProcessStatus> {
         // ブロック開始時点の gain。event が来るたびに更新される。
         let mut gain = self.shared.gain();
         // 「ここまで処理した」位置を表すカーソル。
