@@ -1,11 +1,11 @@
 //! audio thread 上で動く DSP。
 //!
 //! このサンプルでは「入力 sample に gain を掛けて出力に書き戻す」だけの
-//! 単純な処理を行う。`Processor::process` は host が決めた小さな buffer
+//! 単純な処理を行う。[`Processor::process`] は host が決めた小さな buffer
 //! (例: 512 sample) ごとに繰り返し呼び出される real-time な関数なので、
 //! ここでは allocation や lock を避けるのが原則。
 //!
-//! 共有 state (`SharedState`) は `AtomicF32` などで lock-free に
+//! 共有 state ([`SharedState`]) は [`atomic_float::AtomicF32`] などで lock-free に
 //! 読めるようになっており、GUI thread が gain を更新しても audio 側が
 //! ブロックされない設計になっている。
 
@@ -19,10 +19,11 @@ use wrac_clap_adapter::{
 use crate::plugin::PARAM_GAIN_ID;
 use crate::state::SharedState;
 
-/// `PluginCore::activate` で生成され、host の audio thread に所有される DSP 実体。
+/// [`wrac_clap_adapter::PluginCore::activate`] で生成され、host の audio thread に所有される DSP 実体。
 ///
-/// 中身は共有 state への `Arc` だけ。`Processor` instance は host が
-/// `deactivate` するまで生き続け、その間に何度も `process` が呼ばれる。
+/// 中身は共有 state への [`Arc`] だけ。[`Processor`] instance は host が
+/// [`wrac_clap_adapter::PluginCore::deactivate`] するまで生き続け、その間に何度も
+/// [`Processor::process`] が呼ばれる。
 pub(crate) struct WxpExampleGainAudioProcessor {
     shared: Arc<SharedState>,
 }
@@ -79,10 +80,10 @@ impl Processor for WxpExampleGainAudioProcessor {
     }
 }
 
-/// `audio` 内の各 port について `[start, end)` の区間に gain を適用する。
+/// [`AudioProcessBuffer`] 内の各 port について `[start, end)` の区間に gain を適用する。
 ///
 /// host によっては buffer が `f32` のことも `f64` のこともあるので、両方の
-/// ケースを `AudioPortChannels` の variant で処理する。
+/// ケースを [`AudioPortChannels`] の variant で処理する。
 fn process_audio_range(
     audio: &mut AudioProcessBuffer<'_>,
     start: usize,

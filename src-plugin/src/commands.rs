@@ -14,7 +14,7 @@ use crate::gui::{GuiStateNotifier, gain_payload};
 use crate::plugin::PARAM_GAIN_ID;
 use crate::state::SharedState;
 
-/// WebView (フロントエンド) から呼べる command を登録する。
+/// WebView (フロントエンド) から呼べる command を [`WxpCommandHandler`] に登録する。
 ///
 /// フロントエンド側 (`src-gui` の TypeScript) は `invoke("set_gain", { value })`
 /// のような形でこれらの command を呼び出す。

@@ -12,13 +12,13 @@ use crate::plugin::{DEFAULT_GAIN, clamp_gain};
 /// audio processor / GUI / host からの問い合わせ が共有する thread-safe な state。
 ///
 /// gain の値などは複数の thread から触られる:
-/// - audio thread : `process()` の中で gain を読んで音に掛ける
+/// - audio thread : [`wrac_clap_adapter::Processor::process`] の中で gain を読んで音に掛ける
 /// - GUI thread   : ユーザーが slider を動かして gain を書き換える
-/// - host thread  : `parameter_value()` などで host が値を尋ねてくる
+/// - host thread  : [`wrac_clap_adapter::PluginParameters::parameter_value`] などで host が値を尋ねてくる
 ///
-/// そのため値の "Single Source of Truth (SoT)" を `WxpExampleGainPlugin` の私有
-/// field に置くのではなく、`Arc<SharedState>` として共有する。lock 不要な
-/// `AtomicF32` を使うことで audio thread を待たせない実装になっている。
+/// そのため値の "Single Source of Truth (SoT)" を [`crate::plugin::WxpExampleGainPlugin`] の私有
+/// field に置くのではなく、[`std::sync::Arc`]<[`SharedState`]> として共有する。lock 不要な
+/// [`AtomicF32`] を使うことで audio thread を待たせない実装になっている。
 pub(crate) struct SharedState {
     // gain の現在値 (線形 amplitude)。lock-free に読み書きする。
     gain: AtomicF32,

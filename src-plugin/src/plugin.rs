@@ -3,10 +3,10 @@
 //! このファイルは host から見える plugin の契約をまとめる場所です。やっていることを
 //! 大雑把に並べると:
 //!
-//! 1. plugin の自己紹介情報 (`PLUGIN_DESCRIPTOR`) を宣言する
+//! 1. plugin の自己紹介情報 ([`PLUGIN_DESCRIPTOR`]) を宣言する
 //! 2. parameter 定義 (gain ひとつだけ) を host に教える
-//! 3. audio thread / GUI / host で共有する `SharedState` を作る
-//! 4. host から `activate` されたら audio 処理用の `Processor` を渡す
+//! 3. audio thread / GUI / host で共有する [`SharedState`] を作る
+//! 4. host から [`PluginCore::activate`] されたら audio 処理用の [`Processor`] を渡す
 //! 5. host から GUI を要求されたら `gui.rs` 側の controller を渡す
 //! 6. state の save/restore (DAW の project に保存) を実装する
 //!
@@ -69,7 +69,7 @@ pub(crate) const PLUGIN_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
 /// plugin 1 instance を表す型。
 ///
 /// host (DAW) が plugin を読み込むごとにこの struct が 1 つずつ作られる。
-/// audio 処理本体は `activate` で別途 `Processor` として切り出すので、
+/// audio 処理本体は [`PluginCore::activate`] で別途 [`Processor`] として切り出すので、
 /// この struct は lifecycle と、host に公開する extension trait 群を実装する。
 pub(crate) struct WxpExampleGainPlugin {
     // audio thread / GUI / host から共有して触る状態。
@@ -112,10 +112,10 @@ impl WxpExampleGainPlugin {
     }
 }
 
-/// `wrac_clap_adapter::export_clap_plugin!` から呼ばれる factory 関数。
+/// [`wrac_clap_adapter::export_clap_plugin!`] から呼ばれる factory 関数。
 ///
 /// host が新しい plugin instance を必要としたタイミングで adapter が呼び出し、
-/// trait object として `PluginCore` を返す。実装の差し替えはここを変えるだけ。
+/// trait object として [`PluginCore`] を返す。実装の差し替えはここを変えるだけ。
 pub(crate) fn create_plugin_core(context: PluginCoreContext) -> Box<dyn PluginCore> {
     Box::new(WxpExampleGainPlugin::new(context))
 }
@@ -123,9 +123,7 @@ pub(crate) fn create_plugin_core(context: PluginCoreContext) -> Box<dyn PluginCo
 // ---------------------------------------------------------------------------
 // PluginCore: plugin の lifecycle と、提供する extension の宣言
 // ---------------------------------------------------------------------------
-// `PluginCore` は plugin 一個分の lifecycle 全体を見る trait。各メソッドが
-// 「この plugin は ○○ をサポートします」という宣言にもなっており、対応しない
-// 機能では `None` を返せば OK。
+// `PluginCore` は plugin 一個分の lifecycle 全体を見る trait。
 impl PluginCore for WxpExampleGainPlugin {
     /// host が audio 処理を開始する直前に呼ばれる。
     /// ここで返した `Processor` が以降 audio thread 上で `process()` される。

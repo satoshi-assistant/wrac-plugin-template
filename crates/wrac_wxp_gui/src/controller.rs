@@ -18,11 +18,11 @@ pub struct GuiSizeLimits {
     pub max: GuiSize,
 }
 
-/// wxp WebView runtime を `PluginGui` として公開する Send/Sync controller。
+/// wxp WebView runtime を [`PluginGui`] として公開する Send/Sync controller。
 ///
-/// 実 runtime は UI thread の TLS 上に保持し、この型は `PluginInstance` から共有される
-/// handle として GUI lifecycle callback を受ける。現在は host parent に child view として
-/// 貼る embedded GUI のみ対応し、floating window は拒否する。
+/// 実 runtime は UI thread の TLS 上に保持し、この型は CLAP instance から共有される
+/// [`PluginGui`] handle として GUI lifecycle callback を受ける。現在は host parent に
+/// child view として貼る embedded GUI のみ対応し、floating window は拒否する。
 pub struct WxpGuiController {
     factory: Box<dyn WxpGuiFactory>,
     layout: HostGuiLayout,

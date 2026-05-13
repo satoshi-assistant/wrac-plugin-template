@@ -2,7 +2,7 @@
 //!
 //! GUI 本体は HTML/CSS/TypeScript で書かれており (`src-gui/` 以下)、
 //! これを embed した WebView を host window に貼り付けるのがこの module の
-//! 役目。WebView との通信は `wxp` crate の command/channel 機構を使い、
+//! 役目。WebView との通信は [`wxp`] crate の command/channel 機構を使い、
 //! frontend から `set_gain` などの command を invoke できる。
 //!
 //! 役割分担:
@@ -105,7 +105,7 @@ pub(crate) fn create_gui_integration(
 
 /// WebView 側へ gain state を push するための通知口。
 ///
-/// Channel と UI run loop の扱いは GUI runtime 固有なので、共有 state ではなく
+/// [`Channel`] と UI run loop の扱いは GUI runtime 固有なので、共有 state ではなく
 /// GUI module に閉じ込める。通知タイミング自体は呼び出し元が決める。
 pub(crate) struct GuiStateNotifier {
     subscription: Mutex<Option<GuiSubscription>>,

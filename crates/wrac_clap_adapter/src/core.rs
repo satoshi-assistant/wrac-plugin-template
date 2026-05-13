@@ -249,8 +249,8 @@ impl ClapWindow {
 /// CLAP plugin instance の lifecycle。
 ///
 /// extension ごとの API をこの trait に押し込むと、audio effect / instrument / GUI なし
-/// plugin などの差が曖昧になる。`PluginCore` は lifecycle と capability discovery
-/// だけを持ち、extension 固有の契約は `PluginAudioPorts` などへ分ける。
+/// plugin などの差が曖昧になる。[`PluginCore`] は lifecycle と capability discovery
+/// だけを持ち、extension 固有の契約は [`PluginAudioPorts`] などへ分ける。
 pub trait PluginCore: Send + Sync + 'static {
     fn activate(&mut self, context: ActivateContext) -> PluginResult<Box<dyn Processor>>;
     fn deactivate(&mut self, processor: Box<dyn Processor>) -> PluginResult<()>;
@@ -346,7 +346,7 @@ pub struct ParameterValueEvent {
 ///
 /// VST3/AU/AAX host は処理が active な間にも state restore し得る。adapter はこの
 /// capability を `&mut self` として lifecycle mutation と直列化するが、既に作成済みの
-/// `Processor` は並行して処理を続ける可能性がある。
+/// [`Processor`] は並行して処理を続ける可能性がある。
 pub trait PluginStateSupport {
     fn save_state(&mut self) -> PluginResult<PluginState>;
     fn restore_state(&mut self, state: PluginState) -> PluginResult<()>;
