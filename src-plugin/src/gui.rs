@@ -15,18 +15,43 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+use novonotes_run_loop::{RunLoop, RunLoopSender};
+use parking_lot::Mutex;
 use run_loop_timer::Timer;
+use serde_json::json;
 use wrac_clap_adapter::{
     GuiConfiguration, GuiSize, HostParameterEditNotifier, PluginError, PluginResult,
 };
-use wrac_wxp_gui::{DpiConverter, ParentWindowHandle, WxpGuiRuntime, gui_size_to_logical};
-use wxp::{WebContext, WebViewRef, WxpCommandHandler, WxpWebViewBuilder, dpi::LogicalSize};
+use wrac_wxp_gui::{
+    DpiConverter, GuiSizeLimits, ParentWindowHandle, WxpGuiController, WxpGuiRuntime,
+    gui_size_to_logical,
+};
+use wxp::{
+    Channel, WebContext, WebViewRef, WxpCommandHandler, WxpWebViewBuilder, dpi::LogicalSize,
+};
 
-use crate::plugin::{SharedState, register_commands};
+use crate::commands::register_commands;
+use crate::plugin::gain_db_text;
+use crate::state::SharedState;
+
+// GUI window のサイズ範囲 (pixel)。host は initial size でウインドウを開き、
+// ユーザーがリサイズしたときは min..=max の範囲にクランプされる。
+const DEFAULT_GUI_SIZE: GuiSize = GuiSize {
+    width: 360,
+    height: 360,
+};
+const MIN_GUI_SIZE: GuiSize = GuiSize {
+    width: 280,
+    height: 280,
+};
+const MAX_GUI_SIZE: GuiSize = GuiSize {
+    width: 720,
+    height: 720,
+};
 
 // resize 時にクランプする論理ピクセルの上下限。
-const MIN_GUI_SIZE: LogicalSize<f64> = LogicalSize::new(280.0, 280.0);
-const MAX_GUI_SIZE: LogicalSize<f64> = LogicalSize::new(720.0, 720.0);
+const MIN_LOGICAL_GUI_SIZE: LogicalSize<f64> = LogicalSize::new(280.0, 280.0);
+const MAX_LOGICAL_GUI_SIZE: LogicalSize<f64> = LogicalSize::new(720.0, 720.0);
 
 // release build 時のみ、`build.rs` が作った frontend zip を埋め込む。
 // debug build では Vite dev server (`http://127.0.0.1:5173/`) を見るので不要。
@@ -34,11 +59,114 @@ const MAX_GUI_SIZE: LogicalSize<f64> = LogicalSize::new(720.0, 720.0);
 const FRONTEND_ZIP: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/wxp_example_gain_plugin_gui.zip"));
 
+pub(crate) struct GuiIntegration {
+    pub(crate) controller: Arc<WxpGuiController>,
+    pub(crate) notifier: Arc<GuiStateNotifier>,
+}
+
+/// plugin core から使う GUI extension 一式を作る。
+///
+/// `plugin.rs` 側には GUI window のサイズ制約や WebView runtime の詳細を置かず、
+/// host-facing な core 実装から GUI 固有の組み立てを切り離す。
+pub(crate) fn create_gui_integration(
+    shared: Arc<SharedState>,
+    host_parameter_edit_notifier: Arc<dyn HostParameterEditNotifier>,
+) -> GuiIntegration {
+    let notifier = Arc::new(GuiStateNotifier::new());
+    let gui_shared = shared.clone();
+    let gui_notifier = notifier.clone();
+    let gui_host_parameter_edit_notifier = host_parameter_edit_notifier.clone();
+    let controller = Arc::new(
+        WxpGuiController::new(
+            move |configuration, initial_size, parent| {
+                WxpExampleGainGuiRuntime::create(
+                    gui_shared.clone(),
+                    gui_notifier.clone(),
+                    gui_host_parameter_edit_notifier.clone(),
+                    configuration,
+                    initial_size,
+                    parent,
+                )
+                .map(|runtime| Box::new(runtime) as Box<dyn WxpGuiRuntime>)
+            },
+            DEFAULT_GUI_SIZE,
+        )
+        .with_size_limits(GuiSizeLimits {
+            min: MIN_GUI_SIZE,
+            max: MAX_GUI_SIZE,
+        }),
+    );
+
+    GuiIntegration {
+        controller,
+        notifier,
+    }
+}
+
+/// WebView 側へ gain state を push するための通知口。
+///
+/// Channel と UI run loop の扱いは GUI runtime 固有なので、共有 state ではなく
+/// GUI module に閉じ込める。通知タイミング自体は呼び出し元が決める。
+pub(crate) struct GuiStateNotifier {
+    subscription: Mutex<Option<GuiSubscription>>,
+}
+
+#[derive(Clone)]
+struct GuiSubscription {
+    // UI thread (= GUI runtime の run loop) にクロージャを送るための sender。
+    sender: RunLoopSender,
+    // WebView 側 JS の subscriber に値を送るための channel。
+    channel: Channel,
+}
+
+impl GuiStateNotifier {
+    fn new() -> Self {
+        Self {
+            subscription: Mutex::new(None),
+        }
+    }
+
+    pub(crate) fn set_channel(&self, channel: Channel) {
+        *self.subscription.lock() = Some(GuiSubscription {
+            sender: RunLoop::sender(),
+            channel,
+        });
+    }
+
+    pub(crate) fn clear_channel(&self) {
+        *self.subscription.lock() = None;
+    }
+
+    pub(crate) fn notify_gain(&self, gain: f32) {
+        let Some(subscription) = self.subscription.lock().clone() else {
+            // GUI が開いていなければ通知不要。
+            return;
+        };
+
+        let payload = gain_payload(gain);
+        // WebView channel は GUI runtime と同じ UI thread 上で扱う必要がある。
+        // host / audio thread から直接 send すると native UI の thread affinity を
+        // 破るので、いったん run loop に戻してから channel に渡す。
+        subscription.sender.send(move || {
+            let _ = subscription.channel.send(payload);
+        });
+    }
+}
+
+/// WebView へ送る JSON payload。GUI (TypeScript 側) はこの形を期待している。
+pub(crate) fn gain_payload(gain: f32) -> serde_json::Value {
+    json!({
+        "type": "gain-state",
+        "value": gain,
+        "dbText": gain_db_text(gain as f64),
+    })
+}
+
 /// GUI window 1 つに対応する runtime。host が GUI を開くたびに 1 つ作られ、
 /// 閉じるときに drop される。
 pub(crate) struct WxpExampleGainGuiRuntime {
-    // 共有 state。値の更新通知や WebView channel の登録に使う。
-    shared: Arc<SharedState>,
+    // WebView 側 subscription への通知口。
+    gui_notifier: Arc<GuiStateNotifier>,
     // 表示中の WebView。Option にしてあるのは Drop の順序を制御するため。
     web_view: Option<WebViewRef>,
     // wxp の WebContext。WebView より長く生かしておく必要があるので保持する。
@@ -58,6 +186,7 @@ impl WxpExampleGainGuiRuntime {
     /// から呼ばれる factory。parent window に貼り付ける WebView を作って返す。
     pub(crate) fn create(
         shared: Arc<SharedState>,
+        gui_notifier: Arc<GuiStateNotifier>,
         host_parameter_edit_notifier: Arc<dyn HostParameterEditNotifier>,
         configuration: GuiConfiguration,
         initial_size: GuiSize,
@@ -74,6 +203,7 @@ impl WxpExampleGainGuiRuntime {
         register_commands(
             command_handler.clone(),
             shared.clone(),
+            gui_notifier.clone(),
             host_parameter_edit_notifier,
         );
 
@@ -130,14 +260,17 @@ impl WxpExampleGainGuiRuntime {
         // ため、GUI runtime 自身の run loop 上で timer を回して定期的に回収する。
         let gui_update_timer = Timer::new(Duration::from_millis(33), {
             let shared = shared.clone();
+            let gui_notifier = gui_notifier.clone();
             move || {
-                shared.flush_pending_gui_notification();
+                if shared.take_pending_gui_notification() {
+                    gui_notifier.notify_gain(shared.gain());
+                }
             }
         });
         gui_update_timer.start();
 
         Ok(Self {
-            shared: shared.clone(),
+            gui_notifier,
             web_view: Some(web_view),
             wxp_context: Some(wxp_context),
             command_handler,
@@ -162,10 +295,10 @@ impl WxpGuiRuntime for WxpExampleGainGuiRuntime {
         self.gui_size = LogicalSize::new(
             requested
                 .width
-                .clamp(MIN_GUI_SIZE.width, MAX_GUI_SIZE.width),
+                .clamp(MIN_LOGICAL_GUI_SIZE.width, MAX_LOGICAL_GUI_SIZE.width),
             requested
                 .height
-                .clamp(MIN_GUI_SIZE.height, MAX_GUI_SIZE.height),
+                .clamp(MIN_LOGICAL_GUI_SIZE.height, MAX_LOGICAL_GUI_SIZE.height),
         );
 
         if let Some(web_view) = &self.web_view {
@@ -183,7 +316,7 @@ impl WxpGuiRuntime for WxpExampleGainGuiRuntime {
 impl Drop for WxpExampleGainGuiRuntime {
     fn drop(&mut self) {
         // GUI が消えるので、shared state からも channel を外しておく。
-        self.shared.clear_gui_channel();
+        self.gui_notifier.clear_channel();
         // WebView → WebContext の順で drop。逆だと wry が context 不在で panic することがある。
         self.web_view = None;
         self.wxp_context = None;

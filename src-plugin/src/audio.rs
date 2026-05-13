@@ -16,7 +16,8 @@ use wrac_clap_adapter::{
     ProcessContext, ProcessStatus, Processor,
 };
 
-use crate::plugin::{PARAM_GAIN_ID, SharedState};
+use crate::plugin::PARAM_GAIN_ID;
+use crate::state::SharedState;
 
 /// `PluginCore::activate` で生成され、host の audio thread に所有される DSP 実体。
 ///

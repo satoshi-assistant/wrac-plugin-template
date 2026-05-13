@@ -10,13 +10,17 @@
 //! 安全に書けるコードに集中できます。
 //!
 //! ファイル構成:
-//! - `plugin.rs` : plugin の中心。parameter / 共有 state / `PluginCore` 実装。
+//! - `plugin.rs`   : plugin の中心。parameter / state save-restore / `PluginCore` 実装。
+//! - `state.rs`    : audio / GUI / host で共有する lock-free な state。
 //! - `audio.rs`  : audio thread 上で動く DSP (gain を掛けるだけ)。
 //! - `gui.rs`    : WebView ベースの GUI runtime (HTML/JS で UI を作る)。
+//! - `commands.rs` : WebView frontend から呼べる Rust command。
 
 mod audio;
+mod commands;
 mod gui;
 mod plugin;
+mod state;
 
 // CLAP entry point (`clap_entry`) を export する macro。
 // adapter 側が C ABI / factory / lifecycle をすべて生成してくれるので、ここでは
