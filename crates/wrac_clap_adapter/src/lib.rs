@@ -8,16 +8,17 @@ mod clap;
 mod core;
 mod descriptor;
 mod events;
+mod host_gui;
 mod params;
 mod process_buffer;
 
 pub use core::{
     ActivateContext, AudioPortConfigurationRequest, AudioPortFlags, AudioPortInfo, AudioPortType,
-    ClapWindow, GuiApi, GuiConfiguration, GuiResizeHints, GuiSize, HostParameterEditNotifier,
-    NoteDialects, NotePortInfo, ParameterFlags, ParameterInfo, ParameterValueEvent,
-    PluginAudioPorts, PluginConfigurableAudioPorts, PluginCore, PluginCoreContext, PluginError,
-    PluginGui, PluginNotePorts, PluginParameters, PluginResult, PluginState, PluginStateSupport,
-    ProcessContext, ProcessStatus, Processor,
+    ClapWindow, GuiApi, GuiConfiguration, GuiResizeHints, GuiSize, HostGuiResizeRequester,
+    HostParameterEditNotifier, NoteDialects, NotePortInfo, ParameterFlags, ParameterInfo,
+    ParameterValueEvent, PluginAudioPorts, PluginConfigurableAudioPorts, PluginCore,
+    PluginCoreContext, PluginError, PluginGui, PluginNotePorts, PluginParameters, PluginResult,
+    PluginState, PluginStateSupport, ProcessContext, ProcessStatus, Processor,
 };
 pub use descriptor::{Auv2Descriptor, PluginDescriptor, PluginFeature};
 pub use events::{

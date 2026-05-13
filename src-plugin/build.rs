@@ -19,6 +19,7 @@ fn main() {
     println!("cargo:rerun-if-changed=../src-gui/src");
     println!("cargo:rerun-if-changed=../src-gui/package.json");
     println!("cargo:rerun-if-changed=../src-gui/vite.config.ts");
+    println!("cargo:rerun-if-changed=Cargo.toml");
 
     // debug build 時は zip を作らない (Vite dev server を使うため)。
     if env::var("PROFILE").ok().as_deref() != Some("release") {
@@ -31,8 +32,8 @@ fn main() {
         .expect("src-plugin must have a parent directory")
         .join("src-gui")
         .join("dist");
-    let out_zip = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"))
-        .join("wxp_example_gain_plugin_gui.zip");
+    let out_zip =
+        PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR")).join("wrac_gain_plugin_gui.zip");
 
     // release build の前に `npm run build` を回し忘れていた場合は早めに止める。
     if !gui_dist_dir.exists() {

@@ -1,5 +1,5 @@
 /**
- * WXP Example Gain Plugin — Frontend (JavaScript side)
+ * WRAC Gain Plugin — Frontend (JavaScript side)
  *
  * The GUI of a wxp plugin is implemented as a regular web application.
  * Communication with the Rust side uses invoke() and Channel
@@ -17,14 +17,22 @@
 import { Channel, invoke } from "@novonotes/webview-bridge";
 import "./style.css";
 
-/** Type definition matching the JSON produced by gain_payload() on the Rust side */
-type GainState = {
-  type: "gain-state";
-  /** Linear gain value (0.0–2.0) */
+declare const __WRAC_GAIN_VERSION__: string;
+
+/** Type definition matching the JSON produced by parameter_payload() on the Rust side */
+type ParameterState = {
+  type: "parameter-value";
+  /** Stable parameter id used by the native plugin and host automation */
+  parameterId: number;
+  /** Plain parameter value */
   value: number;
-  /** Gain as a dB string (e.g., "-6.0 dB") */
-  dbText: string;
+  /** Parameter value formatted by the Rust side */
+  text: string;
 };
+
+// Keep these ids in sync with PARAM_* constants in src-plugin/src/plugin.rs.
+// When adding parameters to the template, add one id here and route its UI in render().
+const PARAM_GAIN_ID = 1;
 
 // Gain range. Must match MIN_GAIN / MAX_GAIN on the Rust side.
 const MIN_GAIN = 0;
@@ -34,43 +42,105 @@ const MIN_ANGLE = -135;
 const MAX_ANGLE = 135;
 
 // --- DOM element references ---
-const valueLabel = document.querySelector<HTMLDivElement>("#gain-value");
-const dbLabel = document.querySelector<HTMLDivElement>("#gain-db");
+const dbLabel = document.querySelector<HTMLButtonElement>("#gain-db");
+const gainInput = document.querySelector<HTMLInputElement>("#gain-input");
+const buildInfo = document.querySelector<HTMLParagraphElement>("#build-info");
 const knob = document.querySelector<HTMLButtonElement>("#gain-knob");
 const indicator = document.querySelector<HTMLDivElement>("#knob-indicator");
-const fill = document.querySelector<HTMLDivElement>("#knob-fill");
+const resizeGrip = document.querySelector<HTMLButtonElement>("#resize-grip");
 
-if (!valueLabel || !dbLabel || !knob || !indicator || !fill) {
+if (!dbLabel || !gainInput || !buildInfo || !knob || !indicator || !resizeGrip) {
   throw new Error("required elements not found");
 }
+
+buildInfo.textContent = `v${__WRAC_GAIN_VERSION__} (${import.meta.env.PROD ? "Release" : "Debug"})`;
 
 // --- State ---
 let gain = 1;
 let dragging = false;
+let dragStartX = 0;
 let dragStartY = 0;
 let dragStartGain = gain;
 /** Whether a gesture (drag interaction) is in progress. Prevents double-sending. */
 let gestureActive = false;
+
+type ResizeResponse = {
+  ok?: boolean;
+  width?: number;
+  height?: number;
+};
+
+function isEditableElement(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
+function restoreHostFocusIfNeeded(target?: EventTarget | null): void {
+  if (isEditableElement(target ?? null) || isEditableElement(document.activeElement)) {
+    return;
+  }
+  window.setTimeout(() => {
+    if (isEditableElement(document.activeElement)) {
+      return;
+    }
+    void invoke("focus_host_window");
+  }, 0);
+}
+
+function editableText(source: string): string {
+  const match = source.match(/[-+]?\d*\.?\d+/);
+  return match?.[0] ?? source;
+}
+
+function isEditableContextMenuTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  return Boolean(
+    target.closest(
+      'input, textarea, select, [contenteditable=""], [contenteditable="true"], [data-allow-context-menu="true"]',
+    ),
+  );
+}
+
+if (import.meta.env.PROD) {
+  window.addEventListener(
+    "contextmenu",
+    (event) => {
+      if (isEditableContextMenuTarget(event.target)) {
+        return;
+      }
+      event.preventDefault();
+    },
+    { capture: true },
+  );
+}
 
 // -----------------------------------------------------------------------
 // Subscribe to Rust → JS push notifications
 // -----------------------------------------------------------------------
 // Create a Channel and register it with the Rust side as the target for parameter change
 // notifications. When the host changes the gain via automation, this callback updates the UI.
-const channel = new Channel<GainState>((message) => {
-  if (message && message.type === "gain-state") {
+const channel = new Channel<ParameterState>((message) => {
+  if (message && message.type === "parameter-value") {
     render(message);
   }
 });
 
 // Initialization: fetch the current gain state, render the UI, and subscribe to changes.
 void (async () => {
-  // Call the Rust "get_gain_state" command via invoke().
-  const initialState = await invoke<GainState>("get_gain_state");
+  // Call the Rust "get_parameter_state" command via invoke().
+  const initialState = await invoke<ParameterState>("get_parameter_state", {
+    parameterId: PARAM_GAIN_ID,
+  });
   render(initialState);
   // Passing the Channel as an argument lets the Rust side call Channel::send()
   // to push messages to this callback.
-  await invoke("subscribe_gain", { channel });
+  await invoke("subscribe_parameters", { channel });
 })();
 
 function clamp(value: number): number {
@@ -83,14 +153,15 @@ function gainToAngle(value: number): number {
   return MIN_ANGLE + normalized * (MAX_ANGLE - MIN_ANGLE);
 }
 
-/** Receives a gain state and updates the UI display */
-function render(state: GainState): void {
+/** Receives a parameter state and updates the matching UI display */
+function render(state: ParameterState): void {
+  if (state.parameterId !== PARAM_GAIN_ID) {
+    return;
+  }
   gain = clamp(state.value);
-  valueLabel.textContent = `${gain.toFixed(2)}x`;
-  dbLabel.textContent = state.dbText;
+  dbLabel.textContent = state.text;
   const angle = gainToAngle(gain);
   indicator.style.transform = `rotate(${angle}deg)`;
-  fill.style.transform = `rotate(${angle}deg)`;
 }
 
 // -----------------------------------------------------------------------
@@ -107,7 +178,7 @@ function beginGesture(): void {
   gestureActive = true;
   // Call the Rust begin_parameter_gesture command via invoke().
   // void = fire-and-forget (do not await the result).
-  void invoke("begin_parameter_gesture");
+  void invoke("begin_parameter_gesture", { parameterId: PARAM_GAIN_ID });
 }
 
 function endGesture(): void {
@@ -115,7 +186,7 @@ function endGesture(): void {
     return;
   }
   gestureActive = false;
-  void invoke("end_parameter_gesture");
+  void invoke("end_parameter_gesture", { parameterId: PARAM_GAIN_ID });
 }
 
 /** Sets the gain, immediately updates the UI, and notifies the Rust side */
@@ -123,13 +194,50 @@ function applyGain(nextGain: number): void {
   const value = clamp(nextGain);
   // Render locally without waiting for a Rust response, for responsiveness.
   render({
-    type: "gain-state",
+    type: "parameter-value",
+    parameterId: PARAM_GAIN_ID,
     value,
-    dbText:
-      value <= 0 ? "-inf dB" : `${(20 * Math.log10(value)).toFixed(1)} dB`,
+    text: value <= 0 ? "-inf dB" : `${(20 * Math.log10(value)).toFixed(1)} dB`,
   });
-  // Update the parameter via the Rust "set_gain" command.
-  void invoke("set_gain", { value });
+  // Update the parameter via the Rust "set_parameter_value" command.
+  void invoke("set_parameter_value", {
+    parameterId: PARAM_GAIN_ID,
+    value,
+  });
+}
+
+function renderResponse(promise: Promise<ParameterState>): void {
+  void promise.then(render).catch(() => undefined);
+}
+
+function enterTextInput(): void {
+  gainInput.hidden = false;
+  dbLabel.hidden = true;
+  gainInput.value = editableText(dbLabel.textContent ?? "");
+  gainInput.focus();
+  gainInput.select();
+}
+
+function commitTextInput(): void {
+  if (gainInput.hidden) {
+    return;
+  }
+  const text = gainInput.value;
+  gainInput.hidden = true;
+  dbLabel.hidden = false;
+  renderResponse(
+    invoke<ParameterState>("set_parameter_text", {
+      parameterId: PARAM_GAIN_ID,
+      text,
+    }),
+  );
+  restoreHostFocusIfNeeded();
+}
+
+function cancelTextInput(): void {
+  gainInput.hidden = true;
+  dbLabel.hidden = false;
+  restoreHostFocusIfNeeded();
 }
 
 // -----------------------------------------------------------------------
@@ -139,6 +247,7 @@ function applyGain(nextGain: number): void {
 
 knob.addEventListener("pointerdown", (event) => {
   dragging = true;
+  dragStartX = event.clientX;
   dragStartY = event.clientY;
   dragStartGain = gain;
   // setPointerCapture: continue receiving pointermove/pointerup
@@ -151,8 +260,10 @@ knob.addEventListener("pointermove", (event) => {
   if (!dragging) {
     return;
   }
-  // Dragging upward increases gain. 180px covers the full range.
-  const delta = (dragStartY - event.clientY) / 180;
+  // Dragging right or upward increases gain. 180px covers the full range.
+  const deltaX = event.clientX - dragStartX;
+  const deltaY = dragStartY - event.clientY;
+  const delta = (deltaX + deltaY) / 180;
   applyGain(dragStartGain + delta);
 });
 
@@ -163,10 +274,21 @@ const finishDrag = (event: PointerEvent) => {
   dragging = false;
   knob.releasePointerCapture(event.pointerId);
   endGesture();
+  restoreHostFocusIfNeeded(event.target);
 };
 
 knob.addEventListener("pointerup", finishDrag);
 knob.addEventListener("pointercancel", finishDrag);
+
+knob.addEventListener("dblclick", (event) => {
+  event.preventDefault();
+  renderResponse(
+    invoke<ParameterState>("reset_parameter_to_default", {
+      parameterId: PARAM_GAIN_ID,
+    }),
+  );
+  restoreHostFocusIfNeeded(event.target);
+});
 
 // -----------------------------------------------------------------------
 // Mouse wheel adjustment
@@ -174,17 +296,128 @@ knob.addEventListener("pointercancel", finishDrag);
 knob.addEventListener("wheel", (event) => {
   event.preventDefault();
   beginGesture();
-  applyGain(gain - event.deltaY * 0.0015);
+  applyGain(gain + event.deltaY * 0.0015);
   // Wheel events are continuous but have no clear "end", so a 120ms timer
   // is used to end the gesture after the last wheel event.
   window.clearTimeout((knob as unknown as { wheelTimer?: number }).wheelTimer);
   (knob as unknown as { wheelTimer?: number }).wheelTimer = window.setTimeout(
     () => {
       endGesture();
+      restoreHostFocusIfNeeded(event.target);
     },
     120,
   );
 });
+
+dbLabel.addEventListener("pointerdown", (event) => {
+  event.stopPropagation();
+  event.preventDefault();
+  enterTextInput();
+});
+
+dbLabel.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    enterTextInput();
+  }
+});
+
+gainInput.addEventListener("blur", commitTextInput);
+gainInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    commitTextInput();
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    cancelTextInput();
+  }
+});
+gainInput.addEventListener("pointerdown", (event) => event.stopPropagation());
+
+{
+  let dragStart:
+    | {
+        pointerId: number;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      }
+    | null = null;
+  let resizeFrame = 0;
+  let inFlight = false;
+  let queuedSize: { width: number; height: number } | null = null;
+
+  const flushResize = () => {
+    if (inFlight) {
+      return;
+    }
+    inFlight = true;
+    void (async () => {
+      while (queuedSize) {
+        const size = queuedSize;
+        queuedSize = null;
+        await invoke<ResizeResponse>("request_gui_resize", {
+          request: size,
+        }).catch(() => undefined);
+      }
+      inFlight = false;
+    })();
+  };
+
+  const queueResize = (width: number, height: number) => {
+    queuedSize = {
+      width: Math.max(1, Math.round(width)),
+      height: Math.max(1, Math.round(height)),
+    };
+    if (resizeFrame) {
+      return;
+    }
+    resizeFrame = window.requestAnimationFrame(() => {
+      resizeFrame = 0;
+      flushResize();
+    });
+  };
+
+  resizeGrip.addEventListener("pointerdown", (event) => {
+    dragStart = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+    resizeGrip.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+
+  window.addEventListener("pointermove", (event) => {
+    if (!dragStart || dragStart.pointerId !== event.pointerId) {
+      return;
+    }
+    queueResize(
+      dragStart.width + (event.clientX - dragStart.x),
+      dragStart.height + (event.clientY - dragStart.y),
+    );
+  });
+
+  const finishResize = (event: PointerEvent) => {
+    if (!dragStart || dragStart.pointerId !== event.pointerId) {
+      return;
+    }
+    const start = dragStart;
+    dragStart = null;
+    queueResize(
+      start.width + (event.clientX - start.x),
+      start.height + (event.clientY - start.y),
+    );
+    restoreHostFocusIfNeeded(event.target);
+  };
+
+  window.addEventListener("pointerup", finishResize);
+  window.addEventListener("pointercancel", finishResize);
+}
 
 // -----------------------------------------------------------------------
 // Cleanup
@@ -192,5 +425,5 @@ knob.addEventListener("wheel", (event) => {
 // End any active gesture and unsubscribe before the WebView closes.
 window.addEventListener("beforeunload", () => {
   endGesture();
-  void invoke("unsubscribe_gain");
+  void invoke("unsubscribe_parameters");
 });

@@ -8,7 +8,7 @@ mod dpi;
 mod runtime;
 mod window;
 
-pub use controller::{GuiSizeLimits, WxpGuiController};
+pub use controller::{GuiSizeLimits, WxpGuiController, WxpGuiResizeHandle};
 pub use dpi::{DpiConverter, gui_size_to_logical, logical_size_to_gui};
 pub use runtime::{WxpGuiFactory, WxpGuiRuntime};
 pub use window::ParentWindowHandle;

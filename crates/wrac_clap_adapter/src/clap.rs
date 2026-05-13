@@ -42,6 +42,7 @@ use crate::descriptor::{
     Auv2FactoryState, ClapPluginFactoryAsAuv2, ClapPluginInfoAsAuv2, PluginRegistration,
     auv2_factory_ptr, auv2_factory_state, clap_factory_state, factory_ptr,
 };
+use crate::host_gui::HostGuiResizeRequest;
 use crate::params::ParameterEditQueue;
 use crate::{
     ActivateContext, PluginCore, PluginCoreContext, PluginGui, ProcessContext, ProcessStatus,
@@ -100,6 +101,7 @@ impl PluginInstance {
         // 製品側 GUI はこれを保持しても host pointer や CLAP event lifetime を知らずに済む。
         let context = PluginCoreContext {
             host_parameter_edit_notifier: parameter_edits.clone(),
+            host_gui_resize_requester: Arc::new(HostGuiResizeRequest::new(host)),
         };
         let mut core = (registration.create)(context);
         // wrapper は軽量 query の途中で `get_extension()` を呼ぶことがある。ここで

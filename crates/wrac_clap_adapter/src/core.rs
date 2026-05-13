@@ -61,6 +61,7 @@ impl From<AudioBufferError> for PluginError {
 #[derive(Clone)]
 pub struct PluginCoreContext {
     pub host_parameter_edit_notifier: Arc<dyn HostParameterEditNotifier>,
+    pub host_gui_resize_requester: Arc<dyn HostGuiResizeRequester>,
 }
 
 /// GUI など製品側操作で発生した parameter edit を host automation へ通知する。
@@ -71,6 +72,11 @@ pub trait HostParameterEditNotifier: Send + Sync {
     fn begin_edit(&self, parameter_id: u32);
     fn update_edit(&self, parameter_id: u32, value: f64);
     fn end_edit(&self, parameter_id: u32);
+}
+
+/// GUI など製品側操作から host へ GUI client area の resize を要求する。
+pub trait HostGuiResizeRequester: Send + Sync {
+    fn request_resize(&self, size: GuiSize) -> PluginResult<()>;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -249,8 +255,8 @@ impl ClapWindow {
 /// CLAP plugin instance の lifecycle。
 ///
 /// extension ごとの API をこの trait に押し込むと、audio effect / instrument / GUI なし
-/// plugin などの差が曖昧になる。`PluginCore` は lifecycle と capability discovery
-/// だけを持ち、extension 固有の契約は `PluginAudioPorts` などへ分ける。
+/// plugin などの差が曖昧になる。[`PluginCore`] は lifecycle と capability discovery
+/// だけを持ち、extension 固有の契約は [`PluginAudioPorts`] などへ分ける。
 pub trait PluginCore: Send + Sync + 'static {
     fn activate(&mut self, context: ActivateContext) -> PluginResult<Box<dyn Processor>>;
     fn deactivate(&mut self, processor: Box<dyn Processor>) -> PluginResult<()>;
@@ -324,7 +330,8 @@ pub trait PluginNotePorts {
 pub trait PluginParameters {
     fn parameter_count(&self) -> u32;
     fn parameter_info(&self, index: u32) -> Option<ParameterInfo>;
-    fn parameter_base_value(&self, parameter_id: u32) -> PluginResult<f64>;
+    /// Returns the parameter's current plain value, corresponding to CLAP `get_value`.
+    fn parameter_value(&self, parameter_id: u32) -> PluginResult<f64>;
     fn apply_parameter_value(&self, event: ParameterValueEvent) -> PluginResult<f64>;
     fn parameter_value_to_text(&self, parameter_id: u32, value: f64) -> PluginResult<String>;
     fn parameter_text_to_value(&self, parameter_id: u32, text: &str) -> PluginResult<f64>;
@@ -345,7 +352,7 @@ pub struct ParameterValueEvent {
 ///
 /// VST3/AU/AAX host は処理が active な間にも state restore し得る。adapter はこの
 /// capability を `&mut self` として lifecycle mutation と直列化するが、既に作成済みの
-/// `Processor` は並行して処理を続ける可能性がある。
+/// [`Processor`] は並行して処理を続ける可能性がある。
 pub trait PluginStateSupport {
     fn save_state(&mut self) -> PluginResult<PluginState>;
     fn restore_state(&mut self, state: PluginState) -> PluginResult<()>;
