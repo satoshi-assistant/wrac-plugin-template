@@ -1,11 +1,14 @@
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use parking_lot::Mutex;
 use wrac_clap_adapter::{
-    ClapWindow, GuiApi, GuiConfiguration, GuiResizeHints, GuiSize, PluginError, PluginGui,
-    PluginResult,
+    ClapWindow, GuiApi, GuiConfiguration, GuiResizeHints, GuiSize, HostGuiResizeRequester,
+    PluginError, PluginGui, PluginResult,
 };
+use wxp::{WebViewRef, dpi::LogicalSize};
 
+use crate::dpi::DpiConverter;
 use crate::runtime::{
     GuiRuntimeHandle, WxpGuiFactory, create_gui_runtime_handle, is_gui_thread,
     release_gui_thread_ref,
@@ -25,7 +28,8 @@ pub struct GuiSizeLimits {
 /// child view として貼る embedded GUI のみ対応し、floating window は拒否する。
 pub struct WxpGuiController {
     factory: Box<dyn WxpGuiFactory>,
-    layout: HostGuiLayout,
+    layout: Arc<HostGuiLayout>,
+    scale: Arc<Mutex<f64>>,
     runtime: Mutex<GuiRuntimeState>,
 }
 
@@ -43,6 +47,12 @@ struct GuiRuntimeState {
     handle: Option<GuiRuntimeHandle>,
 }
 
+#[derive(Clone)]
+pub struct WxpGuiResizeHandle {
+    layout: Arc<HostGuiLayout>,
+    scale: Arc<Mutex<f64>>,
+}
+
 impl WxpGuiController {
     pub fn new(factory: impl WxpGuiFactory, initial_size: GuiSize) -> Self {
         let size_limits = GuiSizeLimits {
@@ -55,9 +65,17 @@ impl WxpGuiController {
                 height: u32::MAX,
             },
         };
+        Self::new_with_resize_handle(factory, WxpGuiResizeHandle::new(initial_size, size_limits))
+    }
+
+    pub fn new_with_resize_handle(
+        factory: impl WxpGuiFactory,
+        resize_handle: WxpGuiResizeHandle,
+    ) -> Self {
         Self {
             factory: Box::new(factory),
-            layout: HostGuiLayout::new(initial_size, size_limits, GuiResizePolicy::RESIZABLE),
+            layout: resize_handle.layout.clone(),
+            scale: resize_handle.scale.clone(),
             runtime: Mutex::new(GuiRuntimeState {
                 scale: 1.0,
                 parent: None,
@@ -67,8 +85,17 @@ impl WxpGuiController {
     }
 
     pub fn with_size_limits(mut self, limits: GuiSizeLimits) -> Self {
-        self.layout.set_limits(limits);
+        Arc::get_mut(&mut self.layout)
+            .expect("size limits must be configured before sharing controller")
+            .set_limits(limits);
         self
+    }
+
+    pub fn resize_handle(&self) -> WxpGuiResizeHandle {
+        WxpGuiResizeHandle {
+            layout: self.layout.clone(),
+            scale: self.scale.clone(),
+        }
     }
 
     fn destroy_runtime_and_parent_ref(&self) {
@@ -129,6 +156,17 @@ impl HostGuiLayout {
         clamp_size_with_limits(size, self.limits)
     }
 
+    fn clamp_logical_size(&self, size: LogicalSize<f64>) -> LogicalSize<f64> {
+        LogicalSize::new(
+            size.width
+                .round()
+                .clamp(self.limits.min.width as f64, self.limits.max.width as f64),
+            size.height
+                .round()
+                .clamp(self.limits.min.height as f64, self.limits.max.height as f64),
+        )
+    }
+
     fn store_accepted_size(&self, size: GuiSize) {
         self.accepted_size.store(size);
     }
@@ -139,6 +177,40 @@ impl HostGuiLayout {
 
     fn resize_hints(&self) -> GuiResizeHints {
         self.resize_policy.resize_hints()
+    }
+}
+
+impl WxpGuiResizeHandle {
+    pub fn new(initial_size: GuiSize, limits: GuiSizeLimits) -> Self {
+        Self {
+            layout: Arc::new(HostGuiLayout::new(
+                initial_size,
+                limits,
+                GuiResizePolicy::RESIZABLE,
+            )),
+            scale: Arc::new(Mutex::new(1.0)),
+        }
+    }
+
+    pub fn request_resize(
+        &self,
+        requested: LogicalSize<f64>,
+        web_view: &WebViewRef,
+        host_gui_resize_requester: &dyn HostGuiResizeRequester,
+    ) -> PluginResult<GuiSize> {
+        let logical_size = self.layout.clamp_logical_size(requested);
+        let gui_size = GuiSize {
+            width: logical_size.width as u32,
+            height: logical_size.height as u32,
+        };
+        host_gui_resize_requester.request_resize(gui_size)?;
+
+        self.layout.store_accepted_size(gui_size);
+        let scale = *self.scale.lock();
+        web_view
+            .set_bounds(DpiConverter::new(scale).create_webview_bounds(logical_size))
+            .map_err(|_| PluginError::Message("failed to resize webview"))?;
+        Ok(gui_size)
     }
 }
 
@@ -217,6 +289,7 @@ impl PluginGui for WxpGuiController {
         if let Some(handle) = handle {
             handle.set_scale(scale)?;
         }
+        *self.scale.lock() = scale;
         self.runtime.lock().scale = scale;
         Ok(())
     }

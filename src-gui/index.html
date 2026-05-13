@@ -14,29 +14,26 @@
   <body>
     <div id="app">
       <main class="panel">
-        <p class="eyebrow">WXP Example Plugin</p>
-        <h1 class="title">Gain</h1>
-        <!-- Meter display: linear gain value (e.g., "1.00x") and dB value (e.g., "0.0 dB") -->
-        <div class="meter">
-          <div class="value" id="gain-value">1.00x</div>
-          <div class="db" id="gain-db">0.0 dB</div>
+        <div class="header">
+          <p class="eyebrow">WRAC Gain</p>
+          <p class="version" id="build-info"></p>
         </div>
-        <!--
-          Knob UI:
-          - knob-track:     Background track of the knob (arc)
-          - knob-fill:      Filled portion indicating the current value (rotated via CSS transform)
-          - knob-indicator: Indicator line showing the current position (rotated via CSS transform)
-          main.ts dynamically updates the transform of knob-fill and knob-indicator.
-        -->
+        <div class="meter">
+          <button class="value" id="gain-db" type="button">0.0 dB</button>
+          <input class="value value-input" id="gain-input" type="text" hidden />
+        </div>
         <section class="knob-zone">
           <button class="knob" id="gain-knob" type="button" aria-label="Gain knob">
             <div class="knob-track"></div>
-            <div class="knob-fill" id="knob-fill"></div>
             <div class="knob-indicator" id="knob-indicator"></div>
           </button>
         </section>
-        <p class="hint">Drag or scroll to adjust</p>
       </main>
+      <button class="resize-grip" id="resize-grip" type="button" aria-label="Resize plugin window">
+        <svg width="18" height="18" viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M2 10L10 2M5 10L10 5M8 10L10 8" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
+        </svg>
+      </button>
     </div>
   </body>
 </html>

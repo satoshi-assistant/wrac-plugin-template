@@ -53,7 +53,7 @@ pub(crate) const PLUGIN_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
     url: "",
     manual_url: "",
     support_url: "",
-    version: "0.1.0",
+    version: env!("CARGO_PKG_VERSION"),
     description: "Simple gain plugin",
     features: &[PluginFeature::AudioEffect, PluginFeature::Stereo],
     // AUv2 (macOS の Audio Unit v2) 用の追加情報。
@@ -101,7 +101,11 @@ pub(crate) struct SavedPluginState {
 impl WracGainPlugin {
     pub(crate) fn new(context: PluginCoreContext) -> Self {
         let shared = Arc::new(SharedState::new());
-        let gui = create_gui_integration(shared.clone(), context.host_parameter_edit_notifier);
+        let gui = create_gui_integration(
+            shared.clone(),
+            context.host_parameter_edit_notifier,
+            context.host_gui_resize_requester,
+        );
 
         Self {
             shared,
@@ -310,7 +314,7 @@ pub(crate) fn clamp_gain(gain: f32) -> f32 {
     gain.clamp(MIN_GAIN, MAX_GAIN)
 }
 
-fn gain_parameter_info() -> ParameterInfo {
+pub(crate) fn gain_parameter_info() -> ParameterInfo {
     ParameterInfo {
         id: PARAM_GAIN_ID,
         name: "Gain",
@@ -341,7 +345,14 @@ pub(crate) fn parameter_value_text(parameter_id: u32, value: f64) -> PluginResul
 /// parameter の表示文字列を plain value へ戻す。
 ///
 /// 新しい parameter を追加するときは、この `match parameter_id` に parse 処理を追加する。
-fn parameter_text_value(parameter_id: u32, text: &str) -> PluginResult<f64> {
+pub(crate) fn parameter_default_value(parameter_id: u32) -> PluginResult<f64> {
+    match parameter_id {
+        PARAM_GAIN_ID => Ok(gain_parameter_info().default_value),
+        _ => Err(PluginError::InvalidParameter),
+    }
+}
+
+pub(crate) fn parameter_text_value(parameter_id: u32, text: &str) -> PluginResult<f64> {
     match parameter_id {
         PARAM_GAIN_ID => {
             let text = text.trim();

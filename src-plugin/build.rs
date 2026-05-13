@@ -19,6 +19,7 @@ fn main() {
     println!("cargo:rerun-if-changed=../src-gui/src");
     println!("cargo:rerun-if-changed=../src-gui/package.json");
     println!("cargo:rerun-if-changed=../src-gui/vite.config.ts");
+    println!("cargo:rerun-if-changed=Cargo.toml");
 
     // debug build 時は zip を作らない (Vite dev server を使うため)。
     if env::var("PROFILE").ok().as_deref() != Some("release") {

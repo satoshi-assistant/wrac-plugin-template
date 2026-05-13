@@ -17,6 +17,8 @@
 import { Channel, invoke } from "@novonotes/webview-bridge";
 import "./style.css";
 
+declare const __WRAC_GAIN_VERSION__: string;
+
 /** Type definition matching the JSON produced by parameter_payload() on the Rust side */
 type ParameterState = {
   type: "parameter-value";
@@ -40,23 +42,83 @@ const MIN_ANGLE = -135;
 const MAX_ANGLE = 135;
 
 // --- DOM element references ---
-const valueLabel = document.querySelector<HTMLDivElement>("#gain-value");
-const dbLabel = document.querySelector<HTMLDivElement>("#gain-db");
+const dbLabel = document.querySelector<HTMLButtonElement>("#gain-db");
+const gainInput = document.querySelector<HTMLInputElement>("#gain-input");
+const buildInfo = document.querySelector<HTMLParagraphElement>("#build-info");
 const knob = document.querySelector<HTMLButtonElement>("#gain-knob");
 const indicator = document.querySelector<HTMLDivElement>("#knob-indicator");
-const fill = document.querySelector<HTMLDivElement>("#knob-fill");
+const resizeGrip = document.querySelector<HTMLButtonElement>("#resize-grip");
 
-if (!valueLabel || !dbLabel || !knob || !indicator || !fill) {
+if (!dbLabel || !gainInput || !buildInfo || !knob || !indicator || !resizeGrip) {
   throw new Error("required elements not found");
 }
+
+buildInfo.textContent = `v${__WRAC_GAIN_VERSION__} (${import.meta.env.PROD ? "Release" : "Debug"})`;
 
 // --- State ---
 let gain = 1;
 let dragging = false;
+let dragStartX = 0;
 let dragStartY = 0;
 let dragStartGain = gain;
 /** Whether a gesture (drag interaction) is in progress. Prevents double-sending. */
 let gestureActive = false;
+
+type ResizeResponse = {
+  ok?: boolean;
+  width?: number;
+  height?: number;
+};
+
+function isEditableElement(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
+function restoreHostFocusIfNeeded(target?: EventTarget | null): void {
+  if (isEditableElement(target ?? null) || isEditableElement(document.activeElement)) {
+    return;
+  }
+  window.setTimeout(() => {
+    if (isEditableElement(document.activeElement)) {
+      return;
+    }
+    void invoke("focus_host_window");
+  }, 0);
+}
+
+function editableText(source: string): string {
+  const match = source.match(/[-+]?\d*\.?\d+/);
+  return match?.[0] ?? source;
+}
+
+function isEditableContextMenuTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  return Boolean(
+    target.closest(
+      'input, textarea, select, [contenteditable=""], [contenteditable="true"], [data-allow-context-menu="true"]',
+    ),
+  );
+}
+
+if (import.meta.env.PROD) {
+  window.addEventListener(
+    "contextmenu",
+    (event) => {
+      if (isEditableContextMenuTarget(event.target)) {
+        return;
+      }
+      event.preventDefault();
+    },
+    { capture: true },
+  );
+}
 
 // -----------------------------------------------------------------------
 // Subscribe to Rust → JS push notifications
@@ -97,11 +159,9 @@ function render(state: ParameterState): void {
     return;
   }
   gain = clamp(state.value);
-  valueLabel.textContent = `${gain.toFixed(2)}x`;
   dbLabel.textContent = state.text;
   const angle = gainToAngle(gain);
   indicator.style.transform = `rotate(${angle}deg)`;
-  fill.style.transform = `rotate(${angle}deg)`;
 }
 
 // -----------------------------------------------------------------------
@@ -146,6 +206,40 @@ function applyGain(nextGain: number): void {
   });
 }
 
+function renderResponse(promise: Promise<ParameterState>): void {
+  void promise.then(render).catch(() => undefined);
+}
+
+function enterTextInput(): void {
+  gainInput.hidden = false;
+  dbLabel.hidden = true;
+  gainInput.value = editableText(dbLabel.textContent ?? "");
+  gainInput.focus();
+  gainInput.select();
+}
+
+function commitTextInput(): void {
+  if (gainInput.hidden) {
+    return;
+  }
+  const text = gainInput.value;
+  gainInput.hidden = true;
+  dbLabel.hidden = false;
+  renderResponse(
+    invoke<ParameterState>("set_parameter_text", {
+      parameterId: PARAM_GAIN_ID,
+      text,
+    }),
+  );
+  restoreHostFocusIfNeeded();
+}
+
+function cancelTextInput(): void {
+  gainInput.hidden = true;
+  dbLabel.hidden = false;
+  restoreHostFocusIfNeeded();
+}
+
 // -----------------------------------------------------------------------
 // Knob drag interaction
 // -----------------------------------------------------------------------
@@ -153,6 +247,7 @@ function applyGain(nextGain: number): void {
 
 knob.addEventListener("pointerdown", (event) => {
   dragging = true;
+  dragStartX = event.clientX;
   dragStartY = event.clientY;
   dragStartGain = gain;
   // setPointerCapture: continue receiving pointermove/pointerup
@@ -165,8 +260,10 @@ knob.addEventListener("pointermove", (event) => {
   if (!dragging) {
     return;
   }
-  // Dragging upward increases gain. 180px covers the full range.
-  const delta = (dragStartY - event.clientY) / 180;
+  // Dragging right or upward increases gain. 180px covers the full range.
+  const deltaX = event.clientX - dragStartX;
+  const deltaY = dragStartY - event.clientY;
+  const delta = (deltaX + deltaY) / 180;
   applyGain(dragStartGain + delta);
 });
 
@@ -177,10 +274,21 @@ const finishDrag = (event: PointerEvent) => {
   dragging = false;
   knob.releasePointerCapture(event.pointerId);
   endGesture();
+  restoreHostFocusIfNeeded(event.target);
 };
 
 knob.addEventListener("pointerup", finishDrag);
 knob.addEventListener("pointercancel", finishDrag);
+
+knob.addEventListener("dblclick", (event) => {
+  event.preventDefault();
+  renderResponse(
+    invoke<ParameterState>("reset_parameter_to_default", {
+      parameterId: PARAM_GAIN_ID,
+    }),
+  );
+  restoreHostFocusIfNeeded(event.target);
+});
 
 // -----------------------------------------------------------------------
 // Mouse wheel adjustment
@@ -188,17 +296,127 @@ knob.addEventListener("pointercancel", finishDrag);
 knob.addEventListener("wheel", (event) => {
   event.preventDefault();
   beginGesture();
-  applyGain(gain - event.deltaY * 0.0015);
+  applyGain(gain + event.deltaY * 0.0015);
   // Wheel events are continuous but have no clear "end", so a 120ms timer
   // is used to end the gesture after the last wheel event.
   window.clearTimeout((knob as unknown as { wheelTimer?: number }).wheelTimer);
   (knob as unknown as { wheelTimer?: number }).wheelTimer = window.setTimeout(
     () => {
       endGesture();
+      restoreHostFocusIfNeeded(event.target);
     },
     120,
   );
 });
+
+dbLabel.addEventListener("click", (event) => {
+  event.stopPropagation();
+  enterTextInput();
+});
+
+dbLabel.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    enterTextInput();
+  }
+});
+
+gainInput.addEventListener("blur", commitTextInput);
+gainInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    commitTextInput();
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    cancelTextInput();
+  }
+});
+gainInput.addEventListener("pointerdown", (event) => event.stopPropagation());
+
+{
+  let dragStart:
+    | {
+        pointerId: number;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      }
+    | null = null;
+  let resizeFrame = 0;
+  let inFlight = false;
+  let queuedSize: { width: number; height: number } | null = null;
+
+  const flushResize = () => {
+    if (inFlight) {
+      return;
+    }
+    inFlight = true;
+    void (async () => {
+      while (queuedSize) {
+        const size = queuedSize;
+        queuedSize = null;
+        await invoke<ResizeResponse>("request_gui_resize", {
+          request: size,
+        }).catch(() => undefined);
+      }
+      inFlight = false;
+    })();
+  };
+
+  const queueResize = (width: number, height: number) => {
+    queuedSize = {
+      width: Math.max(1, Math.round(width)),
+      height: Math.max(1, Math.round(height)),
+    };
+    if (resizeFrame) {
+      return;
+    }
+    resizeFrame = window.requestAnimationFrame(() => {
+      resizeFrame = 0;
+      flushResize();
+    });
+  };
+
+  resizeGrip.addEventListener("pointerdown", (event) => {
+    dragStart = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+    resizeGrip.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+
+  window.addEventListener("pointermove", (event) => {
+    if (!dragStart || dragStart.pointerId !== event.pointerId) {
+      return;
+    }
+    queueResize(
+      dragStart.width + (event.clientX - dragStart.x),
+      dragStart.height + (event.clientY - dragStart.y),
+    );
+  });
+
+  const finishResize = (event: PointerEvent) => {
+    if (!dragStart || dragStart.pointerId !== event.pointerId) {
+      return;
+    }
+    const start = dragStart;
+    dragStart = null;
+    queueResize(
+      start.width + (event.clientX - start.x),
+      start.height + (event.clientY - start.y),
+    );
+    restoreHostFocusIfNeeded(event.target);
+  };
+
+  window.addEventListener("pointerup", finishResize);
+  window.addEventListener("pointercancel", finishResize);
+}
 
 // -----------------------------------------------------------------------
 // Cleanup

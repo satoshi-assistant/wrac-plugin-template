@@ -61,6 +61,7 @@ impl From<AudioBufferError> for PluginError {
 #[derive(Clone)]
 pub struct PluginCoreContext {
     pub host_parameter_edit_notifier: Arc<dyn HostParameterEditNotifier>,
+    pub host_gui_resize_requester: Arc<dyn HostGuiResizeRequester>,
 }
 
 /// GUI など製品側操作で発生した parameter edit を host automation へ通知する。
@@ -71,6 +72,11 @@ pub trait HostParameterEditNotifier: Send + Sync {
     fn begin_edit(&self, parameter_id: u32);
     fn update_edit(&self, parameter_id: u32, value: f64);
     fn end_edit(&self, parameter_id: u32);
+}
+
+/// GUI など製品側操作から host へ GUI client area の resize を要求する。
+pub trait HostGuiResizeRequester: Send + Sync {
+    fn request_resize(&self, size: GuiSize) -> PluginResult<()>;
 }
 
 #[derive(Debug, Clone, Copy)]

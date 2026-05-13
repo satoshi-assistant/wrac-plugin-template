@@ -20,11 +20,12 @@ use parking_lot::Mutex;
 use run_loop_timer::Timer;
 use serde_json::json;
 use wrac_clap_adapter::{
-    GuiConfiguration, GuiSize, HostParameterEditNotifier, PluginError, PluginResult,
+    GuiConfiguration, GuiSize, HostGuiResizeRequester, HostParameterEditNotifier, PluginError,
+    PluginResult,
 };
 use wrac_wxp_gui::{
-    DpiConverter, GuiSizeLimits, ParentWindowHandle, WxpGuiController, WxpGuiRuntime,
-    gui_size_to_logical,
+    DpiConverter, GuiSizeLimits, ParentWindowHandle, WxpGuiController, WxpGuiResizeHandle,
+    WxpGuiRuntime, gui_size_to_logical,
 };
 use wxp::{
     Channel, WebContext, WebViewRef, WxpCommandHandler, WxpWebViewBuilder, dpi::LogicalSize,
@@ -70,31 +71,37 @@ pub(crate) struct GuiIntegration {
 pub(crate) fn create_gui_integration(
     shared: Arc<SharedState>,
     host_parameter_edit_notifier: Arc<dyn HostParameterEditNotifier>,
+    host_gui_resize_requester: Arc<dyn HostGuiResizeRequester>,
 ) -> GuiIntegration {
     let notifier = Arc::new(GuiStateNotifier::new());
     let gui_shared = shared.clone();
     let gui_notifier = notifier.clone();
     let gui_host_parameter_edit_notifier = host_parameter_edit_notifier.clone();
-    let controller = Arc::new(
-        WxpGuiController::new(
-            move |configuration, initial_size, parent| {
-                WracGainGuiRuntime::create(
-                    gui_shared.clone(),
-                    gui_notifier.clone(),
-                    gui_host_parameter_edit_notifier.clone(),
-                    configuration,
-                    initial_size,
-                    parent,
-                )
-                .map(|runtime| Box::new(runtime) as Box<dyn WxpGuiRuntime>)
-            },
-            DEFAULT_GUI_SIZE,
-        )
-        .with_size_limits(GuiSizeLimits {
+    let gui_host_gui_resize_requester = host_gui_resize_requester.clone();
+    let resize_handle = WxpGuiResizeHandle::new(
+        DEFAULT_GUI_SIZE,
+        GuiSizeLimits {
             min: MIN_GUI_SIZE,
             max: MAX_GUI_SIZE,
-        }),
+        },
     );
+    let gui_resize_handle = resize_handle.clone();
+    let controller = Arc::new(WxpGuiController::new_with_resize_handle(
+        move |configuration, initial_size, parent| {
+            WracGainGuiRuntime::create(
+                gui_shared.clone(),
+                gui_notifier.clone(),
+                gui_host_parameter_edit_notifier.clone(),
+                gui_host_gui_resize_requester.clone(),
+                gui_resize_handle.clone(),
+                configuration,
+                initial_size,
+                parent,
+            )
+            .map(|runtime| Box::new(runtime) as Box<dyn WxpGuiRuntime>)
+        },
+        resize_handle,
+    ));
 
     GuiIntegration {
         controller,
@@ -191,6 +198,8 @@ impl WracGainGuiRuntime {
         shared: Arc<SharedState>,
         gui_notifier: Arc<GuiStateNotifier>,
         host_parameter_edit_notifier: Arc<dyn HostParameterEditNotifier>,
+        host_gui_resize_requester: Arc<dyn HostGuiResizeRequester>,
+        resize_handle: WxpGuiResizeHandle,
         configuration: GuiConfiguration,
         initial_size: GuiSize,
         parent: ParentWindowHandle,
@@ -208,6 +217,8 @@ impl WracGainGuiRuntime {
             shared.clone(),
             gui_notifier.clone(),
             host_parameter_edit_notifier,
+            host_gui_resize_requester,
+            resize_handle,
         );
 
         // WebView の cache/cookie などを置く data directory。
