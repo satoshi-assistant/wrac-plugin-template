@@ -100,9 +100,9 @@ impl PluginRegistrationStorage {
         Self {
             clap_factory: ClapFactoryState {
                 factory: clap_plugin_factory {
-                    get_plugin_count: Some(crate::clap::factory_get_plugin_count),
-                    get_plugin_descriptor: Some(crate::clap::factory_get_plugin_descriptor),
-                    create_plugin: Some(crate::clap::factory_create_plugin),
+                    get_plugin_count: Some(crate::abi::factory_get_plugin_count),
+                    get_plugin_descriptor: Some(crate::abi::factory_get_plugin_descriptor),
+                    create_plugin: Some(crate::abi::factory_create_plugin),
                 },
                 registration,
             },
@@ -110,7 +110,7 @@ impl PluginRegistrationStorage {
                 factory: ClapPluginFactoryAsAuv2 {
                     manufacturer_code: descriptor.auv2_manufacturer_code_ptr(),
                     manufacturer_name: descriptor.auv2_manufacturer_name_ptr(),
-                    get_auv2_info: Some(crate::clap::auv2_get_info),
+                    get_auv2_info: Some(crate::abi::auv2_get_info),
                 },
                 registration,
             },

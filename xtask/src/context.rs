@@ -51,10 +51,8 @@ impl Context {
         self.target_dir.join("wrac")
     }
 
-    pub(crate) fn artifacts_dir(&self, profile: BuildProfile) -> PathBuf {
-        self.wrac_dir()
-            .join("artifacts")
-            .join(profile.artifact_dir())
+    pub(crate) fn plugins_dir(&self, profile: BuildProfile) -> PathBuf {
+        self.wrac_dir().join("plugins").join(profile.artifact_dir())
     }
 
     pub(crate) fn cmake_dir(&self, purpose: &str, profile: BuildProfile) -> PathBuf {
@@ -73,15 +71,15 @@ impl Context {
     }
 
     pub(crate) fn clap_bundle(&self, profile: BuildProfile) -> PathBuf {
-        self.artifacts_dir(profile).join(CLAP_BUNDLE_NAME)
+        self.plugins_dir(profile).join(CLAP_BUNDLE_NAME)
     }
 
     pub(crate) fn vst3_bundle(&self, profile: BuildProfile) -> PathBuf {
-        self.artifacts_dir(profile).join(VST3_BUNDLE_NAME)
+        self.plugins_dir(profile).join(VST3_BUNDLE_NAME)
     }
 
     pub(crate) fn au_bundle(&self, profile: BuildProfile) -> PathBuf {
-        self.artifacts_dir(profile).join(AU_BUNDLE_NAME)
+        self.plugins_dir(profile).join(AU_BUNDLE_NAME)
     }
 
     pub(crate) fn standalone_artifact(&self, profile: BuildProfile) -> PathBuf {

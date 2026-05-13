@@ -12,7 +12,7 @@ use clap_sys::events::{
     clap_output_events, clap_transport_flags,
 };
 
-use crate::core::ParameterValueEvent;
+use crate::api::ParameterValueEvent;
 
 /// `process()` / `flush()` の CLAP event list を callback lifetime に閉じ込める view。
 ///

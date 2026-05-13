@@ -111,7 +111,7 @@ fn package_clap(ctx: &Context, profile: BuildProfile) -> Result<()> {
     println!("Packaging CLAP...");
     let bundle = ctx.clap_bundle(profile);
     remove_if_exists(&bundle)?;
-    fs::create_dir_all(ctx.artifacts_dir(profile))?;
+    fs::create_dir_all(ctx.plugins_dir(profile))?;
 
     match ctx.platform {
         Platform::Macos => {
@@ -162,7 +162,7 @@ fn build_wrapper_set(ctx: &Context, profile: BuildProfile, build: WrapperBuild) 
 
     let build_dir = ctx.cmake_dir(build.purpose(), profile);
     let stage_dir = match build {
-        WrapperBuild::Plugin { .. } => ctx.artifacts_dir(profile),
+        WrapperBuild::Plugin { .. } => ctx.plugins_dir(profile),
         WrapperBuild::Standalone => ctx.standalone_dir(profile),
     };
     fs::create_dir_all(&stage_dir)?;
