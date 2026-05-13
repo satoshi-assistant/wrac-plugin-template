@@ -66,6 +66,15 @@ pub(crate) struct GuiIntegration {
     pub(crate) notifier: Arc<GuiStateNotifier>,
 }
 
+#[derive(Clone)]
+struct GuiRuntimeDependencies {
+    shared: Arc<SharedState>,
+    gui_notifier: Arc<GuiStateNotifier>,
+    host_parameter_edit_notifier: Arc<dyn HostParameterEditNotifier>,
+    host_gui_resize_requester: Arc<dyn HostGuiResizeRequester>,
+    resize_handle: WxpGuiResizeHandle,
+}
+
 /// plugin core から使う GUI extension 一式を作る。
 ///
 /// `plugin.rs` 側には GUI window のサイズ制約や WebView runtime の詳細を置かず、
@@ -76,10 +85,6 @@ pub(crate) fn create_gui_integration(
     host_gui_resize_requester: Arc<dyn HostGuiResizeRequester>,
 ) -> GuiIntegration {
     let notifier = Arc::new(GuiStateNotifier::new());
-    let gui_shared = shared.clone();
-    let gui_notifier = notifier.clone();
-    let gui_host_parameter_edit_notifier = host_parameter_edit_notifier.clone();
-    let gui_host_gui_resize_requester = host_gui_resize_requester.clone();
     let resize_handle = WxpGuiResizeHandle::new(
         DEFAULT_GUI_SIZE,
         GuiSizeLimits {
@@ -87,15 +92,17 @@ pub(crate) fn create_gui_integration(
             max: MAX_GUI_SIZE,
         },
     );
-    let gui_resize_handle = resize_handle.clone();
+    let runtime_dependencies = GuiRuntimeDependencies {
+        shared,
+        gui_notifier: notifier.clone(),
+        host_parameter_edit_notifier,
+        host_gui_resize_requester,
+        resize_handle: resize_handle.clone(),
+    };
     let controller = Arc::new(WxpGuiController::new_with_resize_handle(
         move |configuration, initial_size, parent| {
             WracGainGuiRuntime::create(
-                gui_shared.clone(),
-                gui_notifier.clone(),
-                gui_host_parameter_edit_notifier.clone(),
-                gui_host_gui_resize_requester.clone(),
-                gui_resize_handle.clone(),
+                runtime_dependencies.clone(),
                 configuration,
                 initial_size,
                 parent,
@@ -251,12 +258,8 @@ pub(crate) struct WracGainGuiRuntime {
 impl WracGainGuiRuntime {
     /// host が「GUI を開いて」と要求してきたタイミングで `plugin.rs` の closure
     /// から呼ばれる factory。parent window に貼り付ける WebView を作って返す。
-    pub(crate) fn create(
-        shared: Arc<SharedState>,
-        gui_notifier: Arc<GuiStateNotifier>,
-        host_parameter_edit_notifier: Arc<dyn HostParameterEditNotifier>,
-        host_gui_resize_requester: Arc<dyn HostGuiResizeRequester>,
-        resize_handle: WxpGuiResizeHandle,
+    fn create(
+        dependencies: GuiRuntimeDependencies,
         configuration: GuiConfiguration,
         initial_size: GuiSize,
         parent: ParentWindowHandle,
@@ -271,11 +274,11 @@ impl WracGainGuiRuntime {
         let command_handler = Rc::new(WxpCommandHandler::new());
         register_commands(
             command_handler.clone(),
-            shared.clone(),
-            gui_notifier.clone(),
-            host_parameter_edit_notifier,
-            host_gui_resize_requester,
-            resize_handle,
+            dependencies.shared.clone(),
+            dependencies.gui_notifier.clone(),
+            dependencies.host_parameter_edit_notifier,
+            dependencies.host_gui_resize_requester,
+            dependencies.resize_handle,
         );
 
         // WebView の cache/cookie などを置く data directory。
@@ -332,8 +335,8 @@ impl WracGainGuiRuntime {
         // 実装に依存してしまう。host の癖で GUI だけ古い値を出し続ける問題を防ぐ
         // ため、GUI runtime 自身の run loop 上で timer を回して定期的に回収する。
         let gui_update_timer = Timer::new(Duration::from_millis(33), {
-            let shared = shared.clone();
-            let gui_notifier = gui_notifier.clone();
+            let shared = dependencies.shared.clone();
+            let gui_notifier = dependencies.gui_notifier.clone();
             move || {
                 gui_notifier.notify_parameter(PARAM_GAIN_ID, shared.gain());
             }
@@ -341,7 +344,7 @@ impl WracGainGuiRuntime {
         gui_update_timer.start();
 
         Ok(Self {
-            gui_notifier,
+            gui_notifier: dependencies.gui_notifier,
             web_view: Some(web_view),
             wxp_context: Some(wxp_context),
             command_handler,
