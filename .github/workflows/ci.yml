@@ -82,11 +82,14 @@ jobs:
           xcodebuild -version
           /usr/bin/auval -h || true
 
-      - name: Build and validate plugin bundles
-        run: cargo xtask build --release --target=clap,vst3,au --validate
+      - name: Build plugin bundles
+        run: cargo xtask build --release --target=clap,vst3,au
+
+      - name: Validate plugin bundles
+        run: cargo xtask validate --release --target=vst3,au
 
       - name: Verify plugin bundles
         run: |
-          test -d "target/wrac/artifacts/release/WRAC Gain.clap"
-          test -d "target/wrac/artifacts/release/WRAC Gain.vst3"
-          test -d "target/wrac/artifacts/release/WRAC Gain.component"
+          test -d "target/wrac/plugins/release/WRAC Gain.clap"
+          test -d "target/wrac/plugins/release/WRAC Gain.vst3"
+          test -d "target/wrac/plugins/release/WRAC Gain.component"
