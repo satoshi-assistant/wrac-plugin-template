@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::Result;
-use crate::cli::BuildArgs;
+use crate::cli::{BuildArgs, InstallScope};
 use crate::constants::{
     AU_BUNDLE_NAME, AU_MANUFACTURER, AU_MANUFACTURER_NAME, AU_SUBTYPE, AU_TYPE, CLAP_BUNDLE_NAME,
     CRATE_NAME, PLUGIN_ID, PLUGIN_NAME, STANDALONE_NAME, VST3_BUNDLE_NAME,
@@ -15,7 +15,8 @@ use crate::targets::{
     resolve_validate_targets,
 };
 use crate::util::{
-    copy_path, ensure_exists, env_value_or, home_dir, local_app_data, on_off, remove_if_exists, run,
+    common_program_files, copy_path, ensure_exists, env_value_or, home_dir, local_app_data, on_off,
+    remove_if_exists, run,
 };
 
 pub(crate) fn build(ctx: &Context, args: BuildArgs) -> Result<()> {
@@ -33,13 +34,23 @@ pub(crate) fn build(ctx: &Context, args: BuildArgs) -> Result<()> {
     }
 
     build_gui(ctx)?;
-    build_rust_plugin(ctx, profile)?;
 
     if targets.contains(&Target::Clap) {
+        build_rust_plugin(ctx, profile, RustPluginBuild::Default)?;
         package_clap(ctx, profile)?;
     }
 
-    if targets.iter().any(|target| target.is_wrapper()) {
+    if ctx.platform == Platform::Macos {
+        if targets.contains(&Target::Vst3) {
+            build_rust_plugin(ctx, profile, RustPluginBuild::Vst3)?;
+            build_wrapper_set(ctx, profile, WrapperBuild::Vst3)?;
+        }
+        if targets.contains(&Target::Au) {
+            build_rust_plugin(ctx, profile, RustPluginBuild::Au)?;
+            build_wrapper_set(ctx, profile, WrapperBuild::Au)?;
+        }
+    } else if targets.iter().any(|target| target.is_wrapper()) {
+        build_rust_plugin(ctx, profile, RustPluginBuild::Default)?;
         build_wrapper_set(
             ctx,
             profile,
@@ -51,6 +62,7 @@ pub(crate) fn build(ctx: &Context, args: BuildArgs) -> Result<()> {
     }
 
     if targets.contains(&Target::Standalone) {
+        build_rust_plugin(ctx, profile, RustPluginBuild::Standalone)?;
         build_wrapper_set(ctx, profile, WrapperBuild::Standalone)?;
     }
 
@@ -83,13 +95,62 @@ fn npm_command(platform: Platform) -> &'static str {
     }
 }
 
-fn build_rust_plugin(ctx: &Context, profile: BuildProfile) -> Result<()> {
-    println!("Building Rust plugin...");
+#[derive(Debug, Clone, Copy)]
+enum RustPluginBuild {
+    Default,
+    Vst3,
+    Au,
+    Standalone,
+}
+
+impl RustPluginBuild {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Vst3 => "vst3",
+            Self::Au => "au",
+            Self::Standalone => "standalone",
+        }
+    }
+
+    fn cargo_target_dir(self, ctx: &Context) -> PathBuf {
+        match self {
+            Self::Default => ctx.target_dir.clone(),
+            Self::Vst3 | Self::Au | Self::Standalone => {
+                ctx.wrac_dir().join("cargo").join(self.label())
+            }
+        }
+    }
+
+    fn dynamic_library(self, ctx: &Context, profile: BuildProfile) -> PathBuf {
+        self.cargo_target_dir(ctx)
+            .join(profile.cargo_dir())
+            .join(ctx.platform.dynamic_library_name())
+    }
+
+    fn static_library(self, ctx: &Context, profile: BuildProfile) -> PathBuf {
+        self.cargo_target_dir(ctx)
+            .join(profile.cargo_dir())
+            .join(ctx.platform.static_library_name())
+    }
+
+    fn objc_suffix(self) -> &'static str {
+        match self {
+            Self::Default => "WracGainPlugin",
+            Self::Vst3 => "WracGainPluginVst3",
+            Self::Au => "WracGainPluginAu",
+            Self::Standalone => "WracGainPluginStandalone",
+        }
+    }
+}
+
+fn build_rust_plugin(ctx: &Context, profile: BuildProfile, build: RustPluginBuild) -> Result<()> {
+    println!("Building Rust plugin ({})...", build.label());
     let mut command = Command::new("cargo");
     command
         .arg("build")
         .arg("--target-dir")
-        .arg(&ctx.target_dir)
+        .arg(build.cargo_target_dir(ctx))
         .arg("--manifest-path")
         .arg(ctx.plugin_manifest());
     if let Some(flag) = profile.cargo_flag() {
@@ -103,18 +164,18 @@ fn build_rust_plugin(ctx: &Context, profile: BuildProfile) -> Result<()> {
                 "MACOSX_DEPLOYMENT_TARGET",
                 env_value_or("MACOSX_DEPLOYMENT_TARGET", "11.0"),
             )
-            .env(
-                "WRY_OBJC_SUFFIX",
-                env_value_or("WRY_OBJC_SUFFIX", "WracGainPlugin"),
-            );
+            .env("WRY_OBJC_SUFFIX", build.objc_suffix());
     }
     run(command.current_dir(&ctx.root))?;
 
-    ensure_exists(&ctx.dynamic_library(profile), "dynamic plugin library")?;
+    ensure_exists(
+        &build.dynamic_library(ctx, profile),
+        "dynamic plugin library",
+    )?;
     if ctx.platform.supports_wrappers() {
         // clap-wrapper は CLAP bundle ではなく Rust staticlib を直接 link する。
         // CLAP だけの platform では不要なので、wrapper 対応 OS の時だけ確認する。
-        ensure_exists(&ctx.static_library(profile), "static plugin library")?;
+        ensure_exists(&build.static_library(ctx, profile), "static plugin library")?;
     }
     Ok(())
 }
@@ -122,6 +183,7 @@ fn build_rust_plugin(ctx: &Context, profile: BuildProfile) -> Result<()> {
 fn package_clap(ctx: &Context, profile: BuildProfile) -> Result<()> {
     println!("Packaging CLAP...");
     let bundle = ctx.clap_bundle(profile);
+    let version = plugin_version(ctx)?;
     remove_if_exists(&bundle)?;
     fs::create_dir_all(ctx.plugins_dir(profile))?;
 
@@ -133,7 +195,7 @@ fn package_clap(ctx: &Context, profile: BuildProfile) -> Result<()> {
             let contents = bundle.join("Contents");
             let macos = contents.join("MacOS");
             fs::create_dir_all(&macos)?;
-            fs::write(contents.join("Info.plist"), macos_clap_info_plist())?;
+            fs::write(contents.join("Info.plist"), macos_clap_info_plist(&version))?;
             fs::write(contents.join("PkgInfo"), "BNDL????")?;
             fs::copy(ctx.dynamic_library(profile), macos.join(PLUGIN_NAME))?;
             run(Command::new("install_name_tool")
@@ -157,6 +219,8 @@ fn package_clap(ctx: &Context, profile: BuildProfile) -> Result<()> {
 #[derive(Debug, Clone, Copy)]
 enum WrapperBuild {
     Plugin { vst3: bool, au: bool },
+    Vst3,
+    Au,
     Standalone,
 }
 
@@ -164,17 +228,33 @@ impl WrapperBuild {
     fn purpose(self) -> &'static str {
         match self {
             Self::Plugin { .. } => "wrap",
+            Self::Vst3 => "wrap-vst3",
+            Self::Au => "wrap-au",
             Self::Standalone => "standalone",
+        }
+    }
+
+    fn rust_build(self) -> RustPluginBuild {
+        match self {
+            Self::Plugin { .. } => RustPluginBuild::Default,
+            Self::Vst3 => RustPluginBuild::Vst3,
+            Self::Au => RustPluginBuild::Au,
+            Self::Standalone => RustPluginBuild::Standalone,
         }
     }
 }
 
 fn build_wrapper_set(ctx: &Context, profile: BuildProfile, build: WrapperBuild) -> Result<()> {
-    ensure_exists(&ctx.static_library(profile), "static plugin library")?;
+    let rust_build = build.rust_build();
+    let static_library = rust_build.static_library(ctx, profile);
+    ensure_exists(&static_library, "static plugin library")?;
+    let version = plugin_version(ctx)?;
 
     let build_dir = ctx.cmake_dir(build.purpose(), profile);
     let stage_dir = match build {
-        WrapperBuild::Plugin { .. } => ctx.plugins_dir(profile),
+        WrapperBuild::Plugin { .. } | WrapperBuild::Vst3 | WrapperBuild::Au => {
+            ctx.plugins_dir(profile)
+        }
         WrapperBuild::Standalone => ctx.standalone_dir(profile),
     };
     fs::create_dir_all(&stage_dir)?;
@@ -190,7 +270,7 @@ fn build_wrapper_set(ctx: &Context, profile: BuildProfile, build: WrapperBuild) 
         .arg(&build_dir)
         .arg(format!(
             "-DCLAP_WRAPPER_BUILDER_TARGET_LIB={}",
-            ctx.static_library(profile).display()
+            static_library.display()
         ))
         .arg(format!("-DCLAP_WRAPPER_BUILDER_OUTPUT_NAME={PLUGIN_NAME}"))
         .arg(format!(
@@ -201,6 +281,7 @@ fn build_wrapper_set(ctx: &Context, profile: BuildProfile, build: WrapperBuild) 
             "-DCLAP_WRAPPER_BUILDER_STAGE_DIR={}",
             stage_dir.display()
         ))
+        .arg(format!("-DCLAP_WRAPPER_BUILDER_BUNDLE_VERSION={version}"))
         .arg(format!("-DCMAKE_BUILD_TYPE={}", profile.cmake_config()))
         .arg("-DCLAP_WRAPPER_BUILDER_BUILD_AAX=OFF")
         .arg("-DCLAP_WRAPPER_DOWNLOAD_DEPENDENCIES=OFF")
@@ -214,6 +295,18 @@ fn build_wrapper_set(ctx: &Context, profile: BuildProfile, build: WrapperBuild) 
                     on_off(vst3)
                 ))
                 .arg(format!("-DCLAP_WRAPPER_BUILDER_BUILD_AUV2={}", on_off(au)))
+                .arg("-DCLAP_WRAPPER_BUILDER_BUILD_STANDALONE=OFF");
+        }
+        WrapperBuild::Vst3 => {
+            configure
+                .arg("-DCLAP_WRAPPER_BUILDER_BUILD_VST3=ON")
+                .arg("-DCLAP_WRAPPER_BUILDER_BUILD_AUV2=OFF")
+                .arg("-DCLAP_WRAPPER_BUILDER_BUILD_STANDALONE=OFF");
+        }
+        WrapperBuild::Au => {
+            configure
+                .arg("-DCLAP_WRAPPER_BUILDER_BUILD_VST3=OFF")
+                .arg("-DCLAP_WRAPPER_BUILDER_BUILD_AUV2=ON")
                 .arg("-DCLAP_WRAPPER_BUILDER_BUILD_STANDALONE=OFF");
         }
         WrapperBuild::Standalone => {
@@ -290,6 +383,14 @@ fn build_wrapper_set(ctx: &Context, profile: BuildProfile, build: WrapperBuild) 
                 codesign_nested_macos_bundle(&ctx.au_bundle(profile))?;
             }
         }
+        WrapperBuild::Vst3 => {
+            ensure_exists(&ctx.vst3_bundle(profile), "VST3 artifact")?;
+            codesign_nested_macos_bundle(&ctx.vst3_bundle(profile))?;
+        }
+        WrapperBuild::Au => {
+            ensure_exists(&ctx.au_bundle(profile), "AU artifact")?;
+            codesign_nested_macos_bundle(&ctx.au_bundle(profile))?;
+        }
         WrapperBuild::Standalone => {
             ensure_exists(&ctx.standalone_artifact(profile), "standalone artifact")?;
             if ctx.platform == Platform::Macos {
@@ -305,10 +406,11 @@ fn build_wrapper_set(ctx: &Context, profile: BuildProfile, build: WrapperBuild) 
 pub(crate) fn install(
     ctx: &Context,
     profile: BuildProfile,
+    scope: InstallScope,
     requested: &[PluginTarget],
 ) -> Result<()> {
     let targets = resolve_plugin_targets(ctx.platform, requested)?;
-    install_plugin_targets(ctx, profile, &targets)
+    install_plugin_targets(ctx, profile, scope, &targets)
 }
 
 fn install_built_targets(ctx: &Context, profile: BuildProfile, targets: &[Target]) -> Result<()> {
@@ -322,27 +424,28 @@ fn install_built_targets(ctx: &Context, profile: BuildProfile, targets: &[Target
         println!("No plugin targets to install.");
         return Ok(());
     }
-    install_plugin_targets(ctx, profile, &targets)
+    install_plugin_targets(ctx, profile, InstallScope::User, &targets)
 }
 
 fn install_plugin_targets(
     ctx: &Context,
     profile: BuildProfile,
+    scope: InstallScope,
     targets: &[PluginTarget],
 ) -> Result<()> {
     for target in targets {
         match target {
             PluginTarget::Clap => install_artifact(
                 &ctx.clap_bundle(profile),
-                &install_dir(ctx, PluginFormat::Clap)?,
+                &install_dir(ctx, scope, PluginFormat::Clap)?,
             )?,
             PluginTarget::Vst3 => install_artifact(
                 &ctx.vst3_bundle(profile),
-                &install_dir(ctx, PluginFormat::Vst3)?,
+                &install_dir(ctx, scope, PluginFormat::Vst3)?,
             )?,
             PluginTarget::Au => install_artifact(
                 &ctx.au_bundle(profile),
-                &install_dir(ctx, PluginFormat::Au)?,
+                &install_dir(ctx, scope, PluginFormat::Au)?,
             )?,
         }
     }
@@ -355,21 +458,21 @@ pub(crate) fn uninstall(ctx: &Context, requested: &[PluginTarget], dry_run: bool
     let mut removed = 0usize;
     let mut missing = 0usize;
     for target in targets {
-        let path = installed_artifact(ctx, target)?;
+        for path in installed_artifacts(ctx, target)? {
+            if !path.exists() {
+                println!("Not found: {}", path.display());
+                missing += 1;
+                continue;
+            }
 
-        if !path.exists() {
-            println!("Not found: {}", path.display());
-            missing += 1;
-            continue;
+            if dry_run {
+                println!("Would remove: {}", path.display());
+            } else {
+                println!("Removing: {}", path.display());
+                remove_if_exists(&path)?;
+            }
+            removed += 1;
         }
-
-        if dry_run {
-            println!("Would remove: {}", path.display());
-        } else {
-            println!("Removing: {}", path.display());
-            remove_if_exists(&path)?;
-        }
-        removed += 1;
     }
 
     if dry_run {
@@ -387,27 +490,48 @@ enum PluginFormat {
     Au,
 }
 
-fn install_dir(ctx: &Context, format: PluginFormat) -> Result<PathBuf> {
-    let home = home_dir()?;
-    // 旧 script と同じ user-local install 先に合わせる。
-    // system-wide へ書くと管理者権限や既存 plugin との衝突が発生しやすい。
-    let dir = match (ctx.platform, format) {
-        (Platform::Macos, PluginFormat::Clap) => home.join("Library/Audio/Plug-Ins/CLAP"),
-        (Platform::Macos, PluginFormat::Vst3) => home.join("Library/Audio/Plug-Ins/VST3"),
-        (Platform::Macos, PluginFormat::Au) => home.join("Library/Audio/Plug-Ins/Components"),
-        (Platform::Windows, PluginFormat::Clap) => local_app_data()?
+fn install_dir(ctx: &Context, scope: InstallScope, format: PluginFormat) -> Result<PathBuf> {
+    let dir = match (ctx.platform, scope, format) {
+        (Platform::Macos, InstallScope::User, PluginFormat::Clap) => {
+            home_dir()?.join("Library/Audio/Plug-Ins/CLAP")
+        }
+        (Platform::Macos, InstallScope::User, PluginFormat::Vst3) => {
+            home_dir()?.join("Library/Audio/Plug-Ins/VST3")
+        }
+        (Platform::Macos, InstallScope::User, PluginFormat::Au) => {
+            home_dir()?.join("Library/Audio/Plug-Ins/Components")
+        }
+        (Platform::Macos, InstallScope::System, PluginFormat::Clap) => {
+            PathBuf::from("/Library/Audio/Plug-Ins/CLAP")
+        }
+        (Platform::Macos, InstallScope::System, PluginFormat::Vst3) => {
+            PathBuf::from("/Library/Audio/Plug-Ins/VST3")
+        }
+        (Platform::Macos, InstallScope::System, PluginFormat::Au) => {
+            PathBuf::from("/Library/Audio/Plug-Ins/Components")
+        }
+        (Platform::Windows, InstallScope::User, PluginFormat::Clap) => local_app_data()?
             .join("Programs")
             .join("Common")
             .join("CLAP"),
-        (Platform::Windows, PluginFormat::Vst3) => local_app_data()?
+        (Platform::Windows, InstallScope::User, PluginFormat::Vst3) => local_app_data()?
             .join("Programs")
             .join("Common")
             .join("VST3"),
-        (Platform::Windows, PluginFormat::Au) => {
+        (Platform::Windows, InstallScope::System, PluginFormat::Clap) => {
+            common_program_files()?.join("CLAP")
+        }
+        (Platform::Windows, InstallScope::System, PluginFormat::Vst3) => {
+            common_program_files()?.join("VST3")
+        }
+        (Platform::Windows, _, PluginFormat::Au) => {
             return Err("AU is not supported on Windows".into());
         }
-        (Platform::Linux, PluginFormat::Clap) => home.join(".clap"),
-        (Platform::Linux, PluginFormat::Vst3 | PluginFormat::Au) => {
+        (Platform::Linux, InstallScope::User, PluginFormat::Clap) => home_dir()?.join(".clap"),
+        (Platform::Linux, InstallScope::System, PluginFormat::Clap) => {
+            PathBuf::from("/usr/lib/clap")
+        }
+        (Platform::Linux, _, PluginFormat::Vst3 | PluginFormat::Au) => {
             return Err("VST3/AU install is not supported on Linux".into());
         }
     };
@@ -430,13 +554,21 @@ fn install_artifact(artifact: &Path, destination_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn installed_artifact(ctx: &Context, target: PluginTarget) -> Result<PathBuf> {
-    let path = match target {
-        PluginTarget::Clap => install_dir(ctx, PluginFormat::Clap)?.join(CLAP_BUNDLE_NAME),
-        PluginTarget::Vst3 => install_dir(ctx, PluginFormat::Vst3)?.join(VST3_BUNDLE_NAME),
-        PluginTarget::Au => install_dir(ctx, PluginFormat::Au)?.join(AU_BUNDLE_NAME),
+fn installed_artifacts(ctx: &Context, target: PluginTarget) -> Result<Vec<PathBuf>> {
+    let format = match target {
+        PluginTarget::Clap => PluginFormat::Clap,
+        PluginTarget::Vst3 => PluginFormat::Vst3,
+        PluginTarget::Au => PluginFormat::Au,
     };
-    Ok(path)
+    let bundle_name = match target {
+        PluginTarget::Clap => CLAP_BUNDLE_NAME,
+        PluginTarget::Vst3 => VST3_BUNDLE_NAME,
+        PluginTarget::Au => AU_BUNDLE_NAME,
+    };
+    [InstallScope::User, InstallScope::System]
+        .into_iter()
+        .map(|scope| install_dir(ctx, scope, format).map(|dir| dir.join(bundle_name)))
+        .collect::<Result<Vec<_>>>()
 }
 
 pub(crate) fn validate(
@@ -477,7 +609,7 @@ fn validate_targets(
 
         // auval は path 指定ではなく AudioComponentRegistrar から対象を解決する。
         // そのため freshly built な AU を user-local に置いてから validation する。
-        let install_dir = install_dir(ctx, PluginFormat::Au)?;
+        let install_dir = install_dir(ctx, InstallScope::User, PluginFormat::Au)?;
         install_artifact(&au, &install_dir)?;
 
         // registrar は component 情報を cache するため、直前に置いた AU を見せるには再起動が必要。
@@ -610,7 +742,7 @@ fn print_outputs(ctx: &Context, profile: BuildProfile, targets: &[Target]) {
     }
 }
 
-fn macos_clap_info_plist() -> String {
+fn macos_clap_info_plist(version: &str) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -631,9 +763,9 @@ fn macos_clap_info_plist() -> String {
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>{version}</string>
     <key>CFBundleVersion</key>
-    <string>1.0.0</string>
+    <string>{version}</string>
     <key>NSHumanReadableCopyright</key>
     <string></string>
     <key>NSHighResolutionCapable</key>
@@ -642,6 +774,31 @@ fn macos_clap_info_plist() -> String {
 </plist>
 "#
     )
+}
+
+fn plugin_version(ctx: &Context) -> Result<String> {
+    let manifest = fs::read_to_string(ctx.plugin_manifest())?;
+    let mut in_package_section = false;
+    for line in manifest.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_package_section = line == "[package]";
+            continue;
+        }
+        if !in_package_section {
+            continue;
+        }
+        if let Some(value) = line.strip_prefix("version") {
+            let Some((_, value)) = value.split_once('=') else {
+                continue;
+            };
+            let version = value.trim().trim_matches('"');
+            if !version.is_empty() {
+                return Ok(version.to_string());
+            }
+        }
+    }
+    Err("failed to read plugin version from src-plugin/Cargo.toml".into())
 }
 
 fn codesign(path: &Path) -> Result<()> {
