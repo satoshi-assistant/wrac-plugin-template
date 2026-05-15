@@ -45,8 +45,8 @@ use crate::descriptor::{
 use crate::host_gui::HostGuiResizeRequest;
 use crate::params::ParameterEditQueue;
 use crate::{
-    ActivateContext, PluginCore, PluginCoreContext, PluginGui, ProcessContext, ProcessStatus,
-    Processor,
+    ActivateContext, PluginCore, PluginCoreContext, PluginGui, PluginStateSupport, ProcessContext,
+    ProcessStatus, Processor,
 };
 
 // clap-wrapper は AUv2 metadata 生成時にこの draft factory を読む。CLAP descriptor とは
@@ -69,6 +69,7 @@ pub(crate) struct PluginInstance {
     // `get_extension()` は thread-safe callback なので、ここで `PluginCore` lock を取らない。
     // instance 作成時点の capability に固定し、以後は immutable な function table だけを返す。
     capabilities: PluginCapabilities,
+    state: Option<Arc<dyn PluginStateSupport>>,
     gui: Option<Arc<dyn PluginGui>>,
     // GUI mutation callback は native UI lifecycle に触れる。wrapper が再入・並行
     // 呼び出ししてきた場合は待たずに失敗させ、host 依存の deadlock を避ける。
@@ -113,13 +114,14 @@ impl PluginInstance {
         // wrapper は軽量 query の途中で `get_extension()` を呼ぶことがある。ここで
         // `PluginCore` の lock を待つと host 側の再入順に依存するため、capability は
         // callback が走り始める前の instance 作成時点で固定する。
+        let state = core.state();
         let gui = core.gui();
         let capabilities = PluginCapabilities {
             audio_ports: core.audio_ports().is_some(),
             configurable_audio_ports: core.configurable_audio_ports().is_some(),
             note_ports: core.note_ports().is_some(),
             parameters: core.parameters().is_some(),
-            state: core.state().is_some(),
+            state: state.is_some(),
             gui: gui.is_some(),
         };
         let storage = registration.storage();
@@ -141,6 +143,7 @@ impl PluginInstance {
             },
             core: RwLock::new(core),
             capabilities,
+            state,
             gui,
             gui_callback_busy: Mutex::new(()),
             parameter_edits,

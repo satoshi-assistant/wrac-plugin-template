@@ -88,7 +88,12 @@ pub(crate) struct WracGainPlugin {
     // WebView による GUI を CLAP の GUI extension として扱うための helper。
     // `Arc` にしているのは host が `plugin_gui` を複数回問い合わせるため。
     gui: Arc<WxpGuiController>,
-    // GUI が開いているとき、state restore など host-facing 経路から即時反映するための通知口。
+    // Project state は lifecycle 用の PluginCore lock から切り離して保存・復元する。
+    state_support: Arc<WracGainStateSupport>,
+}
+
+struct WracGainStateSupport {
+    shared: Arc<SharedState>,
     gui_notifier: Arc<GuiStateNotifier>,
 }
 
@@ -113,13 +118,17 @@ impl WracGainPlugin {
             context.host_parameter_edit_notifier,
             context.host_gui_resize_requester,
         );
+        let state_support = Arc::new(WracGainStateSupport {
+            shared: shared.clone(),
+            gui_notifier: gui.notifier.clone(),
+        });
 
         Self {
             shared,
             // template の default は stereo。host が configure してくれば書き換わる。
             audio_channel_count: 2,
             gui: gui.controller,
-            gui_notifier: gui.notifier,
+            state_support,
         }
     }
 }
@@ -193,8 +202,8 @@ impl PluginCore for WracGainPlugin {
         Some(self)
     }
 
-    fn state(&mut self) -> Option<&mut dyn PluginStateSupport> {
-        Some(self)
+    fn state(&self) -> Option<Arc<dyn PluginStateSupport>> {
+        Some(self.state_support.clone())
     }
 
     fn gui(&self) -> Option<Arc<dyn PluginGui>> {
@@ -372,8 +381,8 @@ impl PluginParameters for WracGainPlugin {
 // DAW がプロジェクトを保存するときに `save_state` が、開くときに `restore_state` が
 // 呼ばれる。bytes フォーマットは plugin 側で自由に決められるので、ここでは
 // JSON にしておく (人が読めるとデバッグが楽)。
-impl PluginStateSupport for WracGainPlugin {
-    fn save_state(&mut self) -> PluginResult<PluginState> {
+impl PluginStateSupport for WracGainStateSupport {
+    fn save_state(&self) -> PluginResult<PluginState> {
         log::debug!(
             "saving plugin state: gain={}, bypass={}",
             self.shared.gain(),
@@ -387,7 +396,7 @@ impl PluginStateSupport for WracGainPlugin {
         Ok(PluginState { bytes })
     }
 
-    fn restore_state(&mut self, state: PluginState) -> PluginResult<()> {
+    fn restore_state(&self, state: PluginState) -> PluginResult<()> {
         log::debug!("restoring plugin state: byte_count={}", state.bytes.len());
         let state: SavedPluginState =
             serde_json::from_slice(&state.bytes).map_err(|_| PluginError::InvalidState)?;

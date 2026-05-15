@@ -285,7 +285,7 @@ pub trait PluginCore: Send + Sync + 'static {
         None
     }
 
-    fn state(&mut self) -> Option<&mut dyn PluginStateSupport> {
+    fn state(&self) -> Option<Arc<dyn PluginStateSupport>> {
         None
     }
 
@@ -358,12 +358,13 @@ pub struct ParameterValueEvent {
 
 /// CLAP state extension に対応する capability。
 ///
-/// VST3/AU/AAX host は処理が active な間にも state restore し得る。adapter はこの
-/// capability を `&mut self` として lifecycle mutation と直列化するが、既に作成済みの
-/// [`Processor`] は並行して処理を続ける可能性がある。
-pub trait PluginStateSupport {
-    fn save_state(&mut self) -> PluginResult<PluginState>;
-    fn restore_state(&mut self, state: PluginState) -> PluginResult<()>;
+/// VST3/AU/AAX host は処理が active な間にも state save/restore し得る。
+/// この capability は lifecycle 用の [`PluginCore`] lock から切り離して呼ばれるため、
+/// 実装側は project state の committed snapshot を任意 thread から安全に保存・復元できる
+/// 内部同期境界を持つ必要がある。audio thread が待つ lock をここへ持ち込んではならない。
+pub trait PluginStateSupport: Send + Sync + 'static {
+    fn save_state(&self) -> PluginResult<PluginState>;
+    fn restore_state(&self, state: PluginState) -> PluginResult<()>;
 }
 
 /// CLAP gui extension に対応する capability。
