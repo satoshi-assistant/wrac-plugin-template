@@ -659,13 +659,12 @@ fn ensure_clap_validator(ctx: &Context) -> Result<PathBuf> {
     }
 
     if archive_name.ends_with(".zip") {
-        run(Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                "Expand-Archive -Force -LiteralPath $args[0] -DestinationPath $args[1]",
-            ])
+        // Windows runners provide bsdtar as `tar`, and it can extract zip files.
+        // Using it here keeps argument passing identical to the tar.gz path.
+        run(Command::new("tar")
+            .arg("-xf")
             .arg(&archive)
+            .arg("-C")
             .arg(&validator_dir)
             .current_dir(&ctx.root))?;
     } else {
