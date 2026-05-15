@@ -381,9 +381,7 @@ impl PluginConfigurableAudioPorts for WracGainConfigurableAudioPorts {
                 PluginError::InvalidState
             })?;
         log::debug!(
-            "applying audio port configuration: previous_channel_count={}, channel_count={}",
-            previous_channel_count,
-            channel_count
+            "applying audio port configuration: previous_channel_count={previous_channel_count}, channel_count={channel_count}"
         );
         self.layout.set_channel_count(channel_count);
         Ok(())
