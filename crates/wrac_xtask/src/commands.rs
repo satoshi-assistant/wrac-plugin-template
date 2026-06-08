@@ -1374,6 +1374,7 @@ fn ensure_aax_validator_dtt(ctx: &Context) -> Result<PathBuf> {
         normalize_windows_aax_validator_dtt_config(&root)?;
     }
     if ctx.platform == Platform::Macos {
+        normalize_macos_aax_validator_sysinfo(&root)?;
         // Browser-downloaded Avid archives may carry quarantine attributes, and
         // `run_test.command` is not guaranteed to preserve its executable bit after
         // extraction. Normalize both here so first-run local validation behaves like CI.
@@ -1389,6 +1390,46 @@ fn ensure_aax_validator_dtt(ctx: &Context) -> Result<PathBuf> {
             .current_dir(&ctx.root))?;
     }
     Ok(dtt)
+}
+
+fn normalize_macos_aax_validator_sysinfo(root: &Path) -> Result<()> {
+    let path = root
+        .join("DTT")
+        .join("sources")
+        .join("classes")
+        .join("SysInfo.rb");
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(&path).map_err(|err| {
+        format!(
+            "failed to read AAX validator SysInfo script {}: {err}",
+            path.display()
+        )
+    })?;
+    // Avid's macOS DTT 2024.6 SysInfo assumes every writable volume reports
+    // APFS container fields. Some self-hosted runners expose writable volumes
+    // without those keys, and DTT aborts before running any validator test.
+    // Patch only the extracted target/ copy so CI can reach the real AAX tests.
+    let normalized = content
+        .replace(
+            "disk['Container Free Space'] ||= disk['Container Available Space']\n          disk['Container Free Space'] = disk['Container Free Space'][/^(\\d*\\.?\\d*\\s\\w+)/]",
+            "disk['Container Free Space'] ||= disk['Container Available Space'] || disk['Volume Free Space'] || UNKNOWN_VALUE\n          disk['Container Free Space'] = disk['Container Free Space'][/^(\\d*\\.?\\d*\\s\\w+)/] || disk['Container Free Space']",
+        )
+        .replace(
+            "disk['Total Size'] ||= disk['Container Total Space']\n          disk['Total Size'] = disk['Total Size'][/^(\\d*\\.?\\d*\\s\\w+)/]",
+            "disk['Total Size'] ||= disk['Container Total Space'] || disk['Disk Size'] || UNKNOWN_VALUE\n          disk['Total Size'] = disk['Total Size'][/^(\\d*\\.?\\d*\\s\\w+)/] || disk['Total Size']",
+        );
+    if normalized != content {
+        fs::write(&path, normalized).map_err(|err| {
+            format!(
+                "failed to write normalized AAX validator SysInfo script {}: {err}",
+                path.display()
+            )
+        })?;
+    }
+    Ok(())
 }
 
 fn normalize_windows_aax_validator_dtt_config(root: &Path) -> Result<()> {
