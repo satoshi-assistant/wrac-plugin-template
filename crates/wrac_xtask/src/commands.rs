@@ -1082,11 +1082,17 @@ fn run_aax_validator_dtt(ctx: &Context, aax: &Path, results_dir: &Path) -> Resul
             .arg("--disable_digitrace")
             .arg("--verbose")
             .arg("--logdir")
-            .arg(&log_dir)
+            .arg(aax_validator_cli_path(ctx.platform, &log_dir))
             .arg("--arg")
-            .arg(format!("pi_path={}", aax_search_dir.display()))
+            .arg(format!(
+                "pi_path={}",
+                aax_validator_cli_path(ctx.platform, aax_search_dir)
+            ))
             .arg("--arg")
-            .arg(format!("out_path={}", test_dir.display()))
+            .arg(format!(
+                "out_path={}",
+                aax_validator_cli_path(ctx.platform, &test_dir)
+            ))
             .arg("--arg")
             .arg("result_format=json")
             .arg("--arg")
@@ -1131,6 +1137,18 @@ fn run_aax_validator_dtt(ctx: &Context, aax: &Path, results_dir: &Path) -> Resul
     }
 
     Ok(())
+}
+
+fn aax_validator_cli_path(platform: Platform, path: &Path) -> String {
+    let path = path.display().to_string();
+    if platform == Platform::Windows {
+        // DTT's Ruby scripts parse these values as plain strings rather than Win32
+        // paths. Mixed separators can make `findaaxplugins` return an empty string,
+        // which then crashes the bundled ValidatorRunAllTests script.
+        path.replace('/', "\\")
+    } else {
+        path
+    }
 }
 
 struct AaxValidatorOutput {
