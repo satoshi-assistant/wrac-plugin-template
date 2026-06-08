@@ -1031,7 +1031,7 @@ fn run_aax_validator(ctx: &Context, aax: &Path) -> Result<()> {
     // validator output if DTT exits early or changes a result reference.
     remove_if_exists(&results_dir)?;
     fs::create_dir_all(&results_dir)?;
-    let aax = stage_aax_for_validator(&results_dir, aax)?;
+    let aax = stage_aax_for_validator(ctx.platform, &results_dir, aax)?;
 
     println!("Running AAX validator for: {}", aax.display());
     println!(
@@ -1259,21 +1259,44 @@ fn aax_validator_timeout() -> Result<Duration> {
     Ok(Duration::from_secs(seconds))
 }
 
-fn stage_aax_for_validator(results_dir: &Path, aax: &Path) -> Result<PathBuf> {
-    let bundle_name = aax
+fn stage_aax_for_validator(platform: Platform, results_dir: &Path, aax: &Path) -> Result<PathBuf> {
+    let source_bundle_name = aax
         .file_name()
         .ok_or_else(|| format!("AAX bundle path has no file name: {}", aax.display()))?;
+    let bundle_name = if platform == Platform::Windows {
+        windows_aax_validator_bundle_name(source_bundle_name)
+    } else {
+        source_bundle_name.to_owned()
+    };
     let staged_aax = results_dir.join("input").join(bundle_name);
-    // DSH/DTT path handling is easier to keep stable when the search directory has
-    // no spaces, but the `.aaxplugin` bundle name itself should stay product-facing.
-    // Avid's DTT discovery inspects bundle structure, so renaming the bundle during
-    // staging can make `findaaxplugins` miss an otherwise valid plug-in.
+    // This is a validator-only copy. Windows DTT passes discovered plug-in paths
+    // through several Ruby and DigiShell string layers; spaces in the bundle folder
+    // can make the first validator test hang before it writes logs. The shipped
+    // product bundle name is left untouched.
     remove_if_exists(&staged_aax)?;
     if let Some(parent) = staged_aax.parent() {
         fs::create_dir_all(parent)?;
     }
     copy_path(aax, &staged_aax)?;
     Ok(staged_aax)
+}
+
+fn windows_aax_validator_bundle_name(bundle_name: &std::ffi::OsStr) -> std::ffi::OsString {
+    let bundle_name = bundle_name.to_string_lossy();
+    let stem = bundle_name
+        .strip_suffix(".aaxplugin")
+        .unwrap_or(&bundle_name)
+        .chars()
+        .filter(|character| {
+            character.is_ascii_alphanumeric() || *character == '_' || *character == '-'
+        })
+        .collect::<String>();
+    let stem = if stem.is_empty() {
+        "Plugin"
+    } else {
+        stem.as_str()
+    };
+    format!("{stem}.aaxplugin").into()
 }
 
 fn print_aax_validator_output(stdout: &[u8], stderr: &[u8]) {
