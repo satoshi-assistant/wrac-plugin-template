@@ -1093,7 +1093,14 @@ fn run_aax_validator_dtt(ctx: &Context, aax: &Path, results_dir: &Path) -> Resul
         fs::write(&stderr_path, &output.stderr)?;
 
         let result_path = aax_validator_result_path(results_dir, index, test_id);
-        let dtt_result = find_aax_validator_dtt_result(&test_dir, test_id)?;
+        let dtt_result = match find_aax_validator_dtt_result(&test_dir, test_id) {
+            Ok(path) => path,
+            Err(err) => {
+                print_aax_validator_output(&output.stdout, &output.stderr);
+                print_aax_validator_dtt_logs(&log_dir)?;
+                return Err(err);
+            }
+        };
         // DTT writes result files with connection-specific suffixes. Copy each one to
         // a deterministic per-test path so CI artifacts and final pass/fail checks do
         // not depend on DigiShell connection IDs.
