@@ -1493,14 +1493,17 @@ fn aax_validator_dsh_root(ctx: &Context) -> Result<PathBuf> {
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("zip"))
     {
-        // Windows validator downloads are zip archives. GitHub-hosted Windows runners
-        // provide 7-Zip, and using it here avoids relying on tar implementations that
-        // only support tar streams.
-        run(Command::new("7z")
-            .arg("x")
-            .arg(&archive)
-            .arg(format!("-o{}", extracted_root.display()))
-            .arg("-y")
+        // Windows validator downloads are zip archives. Use PowerShell instead of
+        // assuming 7-Zip exists so self-hosted runners and developer machines share
+        // the same setup contract.
+        run(Command::new("powershell.exe")
+            .arg("-NoProfile")
+            .arg("-Command")
+            .arg(format!(
+                "Expand-Archive -LiteralPath '{}' -DestinationPath '{}' -Force",
+                archive.display(),
+                extracted_root.display()
+            ))
             .current_dir(&ctx.root))?;
     } else {
         run(Command::new("tar")
