@@ -108,8 +108,8 @@ impl PluginMetadata {
         format!("{}.aaxplugin", self.bundle_name)
     }
 
-    pub(crate) fn au_bundle_name(&self, plugin: &PluginProductMetadata) -> String {
-        format!("{}.component", plugin.plugin_name)
+    pub(crate) fn au_bundle_name(&self) -> String {
+        format!("{}.component", self.bundle_name)
     }
 
     pub(crate) fn bundle_identity_plugin(&self) -> &PluginProductMetadata {

@@ -55,22 +55,26 @@ const AAX_VALIDATOR_TIMEOUT_SECS: u64 = 15 * 60;
 
 pub(crate) fn build_gui(ctx: &Context) -> Result<()> {
     println!("Building GUI...");
+    if !ctx.gui_dir().join("package.json").exists() {
+        println!("No src-gui/package.json found; skipping GUI build.");
+        return Ok(());
+    }
     // build.rs embeds src-gui/dist into the plugin binary, so the frontend must be
     // finalized here first. Reversing the order risks bundling a stale or empty dist.
-    run(Command::new(npm_command(ctx.platform))
+    run(Command::new(pnpm_command(ctx.platform))
         .arg("install")
         .current_dir(ctx.gui_dir()))?;
-    run(Command::new(npm_command(ctx.platform))
+    run(Command::new(pnpm_command(ctx.platform))
         .args(["run", "build"])
         .current_dir(ctx.gui_dir()))?;
     Ok(())
 }
 
-fn npm_command(platform: Platform) -> &'static str {
+fn pnpm_command(platform: Platform) -> &'static str {
     if platform == Platform::Windows {
-        "npm.cmd"
+        "pnpm.cmd"
     } else {
-        "npm"
+        "pnpm"
     }
 }
 
@@ -381,7 +385,7 @@ pub(crate) fn configure_wrapper(
         push_cmake_arg(&mut args, generator);
     }
 
-    if cmake_configure_is_current(&build_dir, &args)? {
+    if cmake_configure_is_current(&build_dir, &args, &ctx.wrapper_dir)? {
         println!(
             "CMake configure is up to date for {} ({})",
             build.purpose(),
@@ -399,7 +403,7 @@ pub(crate) fn configure_wrapper(
         );
     }
     run(configure.current_dir(&ctx.root))?;
-    write_cmake_configure_stamp(&build_dir, &args)?;
+    write_cmake_configure_stamp(&build_dir, &args, &ctx.wrapper_dir)?;
     Ok(())
 }
 
@@ -485,18 +489,7 @@ fn cmake_wrapper_targets(ctx: &Context, build: WrapperBuild, target: WrapperTarg
     match target {
         WrapperTarget::Vst3 => vec![format!("{base}_vst3")],
         WrapperTarget::Aax => vec![format!("{base}_aax")],
-        WrapperTarget::Au => ctx
-            .metadata
-            .plugins
-            .iter()
-            .enumerate()
-            .map(|(index, plugin)| {
-                format!(
-                    "{base}_product_{index}_{}_auv2",
-                    cmake_identifier(&plugin.plugin_name)
-                )
-            })
-            .collect::<Vec<_>>(),
+        WrapperTarget::Au => vec![format!("{base}_auv2")],
         WrapperTarget::Standalone => ctx
             .metadata
             .plugins
@@ -507,31 +500,6 @@ fn cmake_wrapper_targets(ctx: &Context, build: WrapperBuild, target: WrapperTarg
     }
 }
 
-fn cmake_identifier(value: &str) -> String {
-    // CMake's string(MAKE_C_IDENTIFIER) is used by clap_wrapper_builder when it
-    // creates product-specific AU targets. Mirror the part of that contract xtask
-    // needs for --target builds; otherwise multi-product AU builds would plan a
-    // target name that CMake never generated.
-    let mut identifier = value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '_' {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    if !identifier
-        .chars()
-        .next()
-        .is_some_and(|ch| ch.is_ascii_alphabetic() || ch == '_')
-    {
-        identifier.insert(0, '_');
-    }
-    identifier
-}
-
 fn push_cmake_arg(args: &mut Vec<OsString>, arg: impl Into<OsString>) {
     args.push(arg.into());
 }
@@ -540,14 +508,31 @@ fn cmake_configure_stamp_path(build_dir: &Path) -> PathBuf {
     build_dir.join(".wrac-configure-args")
 }
 
-fn cmake_configure_stamp(args: &[OsString]) -> String {
-    args.iter()
-        .map(|arg| arg.to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("\n")
+fn cmake_configure_stamp(args: &[OsString], wrapper_dir: &Path) -> Result<String> {
+    let mut lines = args
+        .iter()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    for relative_path in [
+        "CMakeLists.txt",
+        "clap-wrapper/cmake/make_clapfirst.cmake",
+        "clap-wrapper/cmake/wrap_auv2.cmake",
+    ] {
+        let path = wrapper_dir.join(relative_path);
+        let modified = fs::metadata(&path)?
+            .modified()?
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos();
+        lines.push(format!("cmake-input:{relative_path}:{modified}"));
+    }
+    Ok(lines.join("\n"))
 }
 
-fn cmake_configure_is_current(build_dir: &Path, args: &[OsString]) -> Result<bool> {
+fn cmake_configure_is_current(
+    build_dir: &Path,
+    args: &[OsString],
+    wrapper_dir: &Path,
+) -> Result<bool> {
     let cache = build_dir.join("CMakeCache.txt");
     let stamp_path = cmake_configure_stamp_path(build_dir);
     if !cache.exists() || !stamp_path.exists() {
@@ -556,16 +541,20 @@ fn cmake_configure_is_current(build_dir: &Path, args: &[OsString]) -> Result<boo
 
     // Running CMake configure on every xtask invocation rewrites generated
     // wrapper entry files, which then forces Xcode/MSBuild to relink even when
-    // the selected CMake target is unchanged. The stamp tracks only xtask-owned
-    // configure inputs; CMake's ZERO_CHECK still handles changes inside the
-    // already-configured source tree during the build step.
-    Ok(fs::read_to_string(stamp_path)? == cmake_configure_stamp(args))
+    // the selected CMake target is unchanged. The stamp tracks xtask-owned
+    // configure inputs plus the wrapper CMake files that define the generated
+    // target graph.
+    Ok(fs::read_to_string(stamp_path)? == cmake_configure_stamp(args, wrapper_dir)?)
 }
 
-fn write_cmake_configure_stamp(build_dir: &Path, args: &[OsString]) -> Result<()> {
+fn write_cmake_configure_stamp(
+    build_dir: &Path,
+    args: &[OsString],
+    wrapper_dir: &Path,
+) -> Result<()> {
     fs::write(
         cmake_configure_stamp_path(build_dir),
-        cmake_configure_stamp(args),
+        cmake_configure_stamp(args, wrapper_dir)?,
     )?;
     Ok(())
 }
@@ -718,6 +707,13 @@ pub(crate) fn install_plugin_target(
         )?,
         PluginTarget::Au => {
             let install_dir = install_dir(ctx, scope, PluginFormat::Au)?;
+            for plugin in &ctx.metadata.plugins {
+                // Older multi-product builds emitted one AU component per
+                // product. Remove those stale bundles before installing the
+                // current single component bundle, otherwise hosts may keep
+                // discovering product-specific wrappers with outdated routing.
+                remove_if_exists(&install_dir.join(format!("{}.component", plugin.plugin_name)))?;
+            }
             for artifact in ctx.au_bundles(profile) {
                 install_artifact(&artifact, &install_dir)?;
             }
@@ -860,12 +856,16 @@ pub(crate) fn installed_artifacts(
         PluginTarget::Clap => vec![ctx.metadata.clap_bundle_name()],
         PluginTarget::Vst3 => vec![ctx.metadata.vst3_bundle_name()],
         PluginTarget::Aax => vec![ctx.metadata.aax_bundle_name()],
-        PluginTarget::Au => ctx
-            .metadata
-            .plugins
-            .iter()
-            .map(|plugin| ctx.metadata.au_bundle_name(plugin))
-            .collect(),
+        PluginTarget::Au => {
+            let mut names = vec![ctx.metadata.au_bundle_name()];
+            names.extend(
+                ctx.metadata
+                    .plugins
+                    .iter()
+                    .map(|plugin| format!("{}.component", plugin.plugin_name)),
+            );
+            names
+        }
     };
     let mut artifacts = Vec::new();
     for install_scope in uninstall_scopes(ctx.platform, scope, format)? {
@@ -1577,9 +1577,15 @@ fn clap_validator_executable(platform: Platform, validator_dir: &Path) -> PathBu
 }
 
 fn ensure_no_system_au_conflict(ctx: &Context) -> Result<()> {
-    for plugin in &ctx.metadata.plugins {
-        let system_au = Path::new("/Library/Audio/Plug-Ins/Components")
-            .join(ctx.metadata.au_bundle_name(plugin));
+    let mut bundle_names = vec![ctx.metadata.au_bundle_name()];
+    bundle_names.extend(
+        ctx.metadata
+            .plugins
+            .iter()
+            .map(|plugin| format!("{}.component", plugin.plugin_name)),
+    );
+    for bundle_name in bundle_names {
+        let system_au = Path::new("/Library/Audio/Plug-Ins/Components").join(bundle_name);
         if system_au.exists() {
             return Err(format!(
                 "system-wide AU already exists at {}. auval may validate that copy instead of the freshly built user-local AU. Remove the system-wide component and run validation again.",
