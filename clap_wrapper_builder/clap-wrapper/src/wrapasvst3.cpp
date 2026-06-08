@@ -614,13 +614,21 @@ tresult PLUGIN_API ClapAsVst3::getMidiControllerAssignment(int32 busIndex, int16
                                                            Vst::CtrlNumber midiControllerNumber,
                                                            Vst::ParamID &id /*out*/)
 {
-  // for my first Event bus and for MIDI channel 0 and for MIDI CC Volume only
-  if (busIndex == 0)  // && channel == 0) // && midiControllerNumber == Vst::kCtrlVolume)
+  // Only report mappings that were actually materialized as VST3 parameters.
+  // Some CLAP plugins expose a MIDI note input but no automatable parameters;
+  // returning the zero-initialized table value makes hosts/validators see an
+  // invalid ParamID 0 assignment.
+  id = Vst::kNoParamId;
+  if (busIndex == 0 && channel >= 0 && channel < 16)
   {
     if (midiControllerNumber < Vst::kCountCtrlNumber)  // with program change
     {
-      id = _IMidiMappingIDs[channel][midiControllerNumber];
-      return kResultTrue;
+      auto mappedId = _IMidiMappingIDs[channel][midiControllerNumber];
+      if (mappedId != 0)
+      {
+        id = mappedId;
+        return kResultTrue;
+      }
     }
   }
   return kResultFalse;

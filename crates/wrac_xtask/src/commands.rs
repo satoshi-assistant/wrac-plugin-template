@@ -2,7 +2,7 @@ use std::env;
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Output, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -926,6 +926,7 @@ pub(crate) fn validate_plugin_target(
             ensure_exists(&clap, "CLAP artifact")?;
             let validator = ensure_clap_validator(ctx)?;
             run(Command::new(validator)
+                .env("WRAC_PLUGIN_VALIDATOR", "1")
                 .arg("validate")
                 .arg(&clap)
                 .arg("--only-failed")
@@ -935,7 +936,10 @@ pub(crate) fn validate_plugin_target(
             let vst3 = ctx.vst3_bundle(profile);
             ensure_exists(&vst3, "VST3 artifact")?;
             let validator = ensure_vst3_validator(ctx)?;
-            run(Command::new(validator).arg(&vst3).current_dir(&ctx.root))?;
+            run(Command::new(validator)
+                .env("WRAC_PLUGIN_VALIDATOR", "1")
+                .arg(&vst3)
+                .current_dir(&ctx.root))?;
             // The VST3 validator checks format behavior but does not prove that the
             // host-visible class IDs match package metadata. moduleinfotool reads the built
             // bundle metadata, so this catches build.rs/wrapper byte-order regressions at the
@@ -956,6 +960,7 @@ pub(crate) fn validate_plugin_target(
 
             for plugin in &ctx.metadata.plugins {
                 run(Command::new("/usr/bin/auval")
+                    .env("WRAC_PLUGIN_VALIDATOR", "1")
                     .args([
                         "-v",
                         &plugin.auv2_type,
@@ -1059,13 +1064,17 @@ fn run_aax_validator_dtt(ctx: &Context, aax: &Path, results_dir: &Path) -> Resul
         let log_dir = test_dir.join("logs");
         fs::create_dir_all(&test_dir)?;
         fs::create_dir_all(&log_dir)?;
+        let stdout_path = test_dir.join("dtt-stdout.log");
+        let stderr_path = test_dir.join("dtt-stderr.log");
 
         // Avid ships DTT as the automatable scripting layer for DigiShell. Use the
         // bundled ValidatorRunAllTests script instead of scripting DigiShell stdin
         // directly because Windows hosted CI can launch DigiShell while dropping
         // scripted stdin. The script expects a search directory for `findaaxplugins`;
         // passing the bundle path itself gives a different result shape on some packages.
-        let child = Command::new(&dtt)
+        let mut command = Command::new(&dtt);
+        command
+            .env("WRAC_PLUGIN_VALIDATOR", "1")
             .arg("--script")
             .arg("ValidatorRunAllTests")
             .arg("--no_pref_delete")
@@ -1082,21 +1091,29 @@ fn run_aax_validator_dtt(ctx: &Context, aax: &Path, results_dir: &Path) -> Resul
             .arg("result_format=json")
             .arg("--arg")
             .arg(format!("test_id={test_id}"))
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .current_dir(dtt.parent().unwrap_or(&ctx.root))
-            .spawn()?;
+            .stdout(Stdio::from(fs::File::create(&stdout_path)?))
+            .stderr(Stdio::from(fs::File::create(&stderr_path)?))
+            .current_dir(dtt.parent().unwrap_or(&ctx.root));
+        let child = command.spawn()?;
         let output = wait_for_aax_validator_process(child, aax_validator_timeout()?)?;
-        let stdout_path = test_dir.join("dtt-stdout.log");
-        let stderr_path = test_dir.join("dtt-stderr.log");
-        fs::write(&stdout_path, &output.stdout)?;
-        fs::write(&stderr_path, &output.stderr)?;
+        let stdout = fs::read(&stdout_path)?;
+        let stderr = fs::read(&stderr_path)?;
 
         let result_path = aax_validator_result_path(results_dir, index, test_id);
+        if !output.status.success() {
+            print_aax_validator_output(&stdout, &stderr);
+            print_aax_validator_dtt_logs(&log_dir)?;
+            return Err(format!(
+                "AAX validator/DTT failed while running {test_id}; see {}",
+                stdout_path.display()
+            )
+            .into());
+        }
+
         let dtt_result = match find_aax_validator_dtt_result(&test_dir, test_id) {
             Ok(path) => path,
             Err(err) => {
-                print_aax_validator_output(&output.stdout, &output.stderr);
+                print_aax_validator_output(&stdout, &stderr);
                 print_aax_validator_dtt_logs(&log_dir)?;
                 return Err(err);
             }
@@ -1111,21 +1128,13 @@ fn run_aax_validator_dtt(ctx: &Context, aax: &Path, results_dir: &Path) -> Resul
                 result_path.display()
             )
         })?;
-
-        if !output.status.success() {
-            print_aax_validator_output(&output.stdout, &output.stderr);
-            print_aax_validator_result(&result_path)?;
-            print_aax_validator_dtt_logs(&log_dir)?;
-            return Err(format!(
-                "AAX validator/DTT failed while running {test_id}; see {} and {}",
-                stdout_path.display(),
-                result_path.display()
-            )
-            .into());
-        }
     }
 
     Ok(())
+}
+
+struct AaxValidatorOutput {
+    status: ExitStatus,
 }
 
 fn find_aax_validator_dtt_result(test_dir: &Path, test_id: &str) -> Result<PathBuf> {
@@ -1191,19 +1200,24 @@ fn assert_aax_validator_results(results_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn wait_for_aax_validator_process(mut child: Child, timeout: Duration) -> Result<Output> {
+fn wait_for_aax_validator_process(
+    mut child: Child,
+    timeout: Duration,
+) -> Result<AaxValidatorOutput> {
     let started_at = Instant::now();
     loop {
         if child.try_wait()?.is_some() {
-            return Ok(child.wait_with_output()?);
+            return Ok(AaxValidatorOutput {
+                status: child.wait()?,
+            });
         }
         if started_at.elapsed() >= timeout {
-            // Keep timeouts outside `run()` so failed DTT processes still have their
-            // stdout/stderr printed. That output is usually the only clue when the
-            // validator hangs while loading a bundle.
+            // Keep timeouts outside `run()` so failed DTT processes can still print
+            // their file-backed stdout/stderr. DTT may launch helper processes that
+            // inherit stdio handles, so stdout/stderr are redirected to files instead
+            // of pipes; otherwise `wait_with_output()` can hang after the runner exits.
             child.kill()?;
-            let output = child.wait_with_output()?;
-            print_aax_validator_output(&output.stdout, &output.stderr);
+            let _ = child.wait();
             return Err(format!(
                 "AAX validator process timed out after {} seconds",
                 timeout.as_secs()
@@ -1255,21 +1269,6 @@ fn print_aax_validator_output(stdout: &[u8], stderr: &[u8]) {
         println!("========== AAX validator stderr ==========");
         println!("{stderr}");
     }
-}
-
-fn print_aax_validator_result(path: &Path) -> Result<()> {
-    let content = fs::read_to_string(path).map_err(|err| {
-        format!(
-            "failed to read AAX validator result {}: {err}",
-            path.display()
-        )
-    })?;
-    println!(
-        "========== AAX validator result ({}) ==========",
-        path.display()
-    );
-    println!("{content}");
-    Ok(())
 }
 
 fn print_aax_validator_dtt_logs(log_dir: &Path) -> Result<()> {
