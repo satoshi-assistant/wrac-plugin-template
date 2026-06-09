@@ -146,17 +146,54 @@ void utf8_to_utf16l(const char *utf8string, uint16_t *target, size_t targetsize)
   target[targetpos] = 0;
 }
 
+bool ClapAsVst3::createPluginInFactoryContext()
+{
+  if (_plugin)
+  {
+    return true;
+  }
+
+  if (!_library->bindRunLoopThread())
+  {
+    return false;
+  }
+  _runLoopThreadBound = true;
+
+  _plugin = Clap::Plugin::createInstance(*_library, _libraryIndex, this);
+  if (!_plugin)
+  {
+    unbindRunLoopThreadIfNeeded();
+    return false;
+  }
+
+  return true;
+}
+
+void ClapAsVst3::unbindRunLoopThreadIfNeeded()
+{
+  if (_runLoopThreadBound)
+  {
+    _library->unbindRunLoopThread();
+    _runLoopThreadBound = false;
+  }
+}
+
 tresult PLUGIN_API ClapAsVst3::initialize(FUnknown *context)
 {
   auto result = super::initialize(context);
   context->queryInterface(Vst::IHostApplication::iid, (void **)&vst3HostApplication);
   if (result == kResultOk)
   {
-    if (!_plugin)
-    {
-      _plugin = Clap::Plugin::createInstance(*_library, _libraryIndex, this);
-    }
     result = (_plugin && _plugin->initialize()) ? kResultOk : kResultFalse;
+    if (result != kResultOk)
+    {
+      if (_plugin)
+      {
+        _plugin->terminate();
+        _plugin.reset();
+      }
+      unbindRunLoopThreadIfNeeded();
+    }
   }
 
   return result;
@@ -176,6 +213,7 @@ tresult PLUGIN_API ClapAsVst3::terminate()
     }
     _plugin->terminate();
     _plugin.reset();
+    unbindRunLoopThreadIfNeeded();
   }
 
   return super::terminate();

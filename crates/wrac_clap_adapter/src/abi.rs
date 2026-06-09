@@ -435,6 +435,10 @@ pub(crate) unsafe extern "C" fn entry_get_factory(
                 .any(|descriptor| descriptor.descriptor().aax.is_some())
         {
             aax_factory_ptr(storage)
+        } else if factory_id.to_bytes_with_nul()
+            == crate::run_loop_factory::WRAC_PLUGIN_FACTORY_RUN_LOOP
+        {
+            crate::run_loop_factory::factory_ptr()
         } else {
             ptr::null()
         }

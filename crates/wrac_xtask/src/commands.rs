@@ -52,6 +52,7 @@ const AAX_VALIDATOR_SKIPPED_TESTS: &[(&str, &str)] = &[
     ),
 ];
 const AAX_VALIDATOR_TIMEOUT_SECS: u64 = 15 * 60;
+const AAX_VALIDATOR_DTT_TIMEOUT_FACTOR: u32 = 10;
 
 pub(crate) fn build_gui(ctx: &Context) -> Result<()> {
     println!("Building GUI...");
@@ -1053,6 +1054,7 @@ fn run_aax_validator_dtt(ctx: &Context, aax: &Path, results_dir: &Path) -> Resul
     let aax_search_dir = aax
         .parent()
         .ok_or_else(|| format!("AAX bundle path has no parent directory: {}", aax.display()))?;
+    patch_aax_validator_dtt_launcher(&dtt)?;
     println!("========== Running command ==========");
     println!("$ {}", dtt.display());
 
@@ -1075,23 +1077,21 @@ fn run_aax_validator_dtt(ctx: &Context, aax: &Path, results_dir: &Path) -> Resul
         let mut command = Command::new(&dtt);
         command
             .env("WRAC_PLUGIN_VALIDATOR", "1")
+            .env("WRAC_AAXPLUGIN_PATH", aax_validator_cli_path(ctx.platform, aax))
             .arg("--script")
             .arg("ValidatorRunAllTests")
             .arg("--no_pref_delete")
             .arg("--no_move_options")
             .arg("--disable_digitrace")
             .arg("--verbose")
+            .arg("--timeout_factor")
+            .arg(aax_validator_dtt_timeout_factor()?.to_string())
             .arg("--logdir")
             .arg(aax_validator_cli_path(ctx.platform, &log_dir))
             .arg("--arg")
             .arg(format!(
                 "pi_path={}",
                 aax_validator_cli_path(ctx.platform, aax_search_dir)
-            ))
-            .arg("--arg")
-            .arg(format!(
-                "aaxplugin_path={}",
-                aax_validator_cli_path(ctx.platform, aax)
             ))
             .arg("--arg")
             .arg(format!(
@@ -1105,6 +1105,20 @@ fn run_aax_validator_dtt(ctx: &Context, aax: &Path, results_dir: &Path) -> Resul
             .stdout(Stdio::from(fs::File::create(&stdout_path)?))
             .stderr(Stdio::from(fs::File::create(&stderr_path)?))
             .current_dir(dtt.parent().unwrap_or(&ctx.root));
+        if ctx.platform == Platform::Windows {
+            // The public wrac-gain CI path uses validator discovery via pi_path.
+            // Keep that path on macOS because DTT result transport is sensitive to
+            // its argument shape. Windows 2024.6 can return an empty discovery
+            // result for staged developer bundles, so only Windows receives the
+            // explicit bundle path escape hatch patched into ValidatorRunAllTests.
+            command
+                .env("WRAC_AAXPLUGIN_PATH", aax_validator_cli_path(ctx.platform, aax))
+                .arg("--arg")
+                .arg(format!(
+                    "aaxplugin_path={}",
+                    aax_validator_cli_path(ctx.platform, aax)
+                ));
+        }
         let child = command.spawn()?;
         let output = wait_for_aax_validator_process(child, aax_validator_timeout()?)?;
         let stdout = fs::read(&stdout_path)?;
@@ -1264,6 +1278,22 @@ fn aax_validator_timeout() -> Result<Duration> {
     Ok(Duration::from_secs(seconds))
 }
 
+fn aax_validator_dtt_timeout_factor() -> Result<u32> {
+    let factor = match env::var("AAX_VALIDATOR_DTT_TIMEOUT_FACTOR") {
+        Ok(value) => value.parse().map_err(|err| {
+            format!("failed to parse AAX_VALIDATOR_DTT_TIMEOUT_FACTOR={value}: {err}")
+        })?,
+        Err(env::VarError::NotPresent) => AAX_VALIDATOR_DTT_TIMEOUT_FACTOR,
+        Err(err) => {
+            return Err(format!("failed to read AAX_VALIDATOR_DTT_TIMEOUT_FACTOR: {err}").into());
+        }
+    };
+    if factor == 0 {
+        return Err("AAX_VALIDATOR_DTT_TIMEOUT_FACTOR must be greater than 0".into());
+    }
+    Ok(factor)
+}
+
 fn stage_aax_for_validator(platform: Platform, results_dir: &Path, aax: &Path) -> Result<PathBuf> {
     let source_bundle_name = aax
         .file_name()
@@ -1416,9 +1446,8 @@ fn ensure_aax_validator_dtt(ctx: &Context) -> Result<PathBuf> {
     let dtt = aax_validator_dtt_runner(&root, ctx.platform)?;
     ensure_exists(&dtt, "AAX validator DTT runner")?;
     patch_aax_validator_run_all_tests(&root)?;
-    if ctx.platform == Platform::Windows {
-        normalize_windows_aax_validator_dtt_config(&root)?;
-    }
+    patch_aax_validator_bundle_path_scripts(&root)?;
+    normalize_aax_validator_dtt_config(&root)?;
     if ctx.platform == Platform::Macos {
         normalize_macos_aax_validator_sysinfo(&root)?;
         // Browser-downloaded Avid archives may carry quarantine attributes, and
@@ -1470,6 +1499,43 @@ fn patch_aax_validator_run_all_tests(root: &Path) -> Result<()> {
     Ok(())
 }
 
+fn patch_aax_validator_dtt_launcher(path: &Path) -> Result<()> {
+    if !path
+        .file_name()
+        .is_some_and(|file_name| file_name == "run_test.command")
+    {
+        return Ok(());
+    }
+    let content = fs::read_to_string(path).map_err(|err| {
+        format!(
+            "failed to read AAX validator DTT launcher {}: {err}",
+            path.display()
+        )
+    })?;
+    // Avid's macOS launcher uses `eval ... $@`, which re-splits arguments after
+    // `std::process::Command` has already preserved them. Bundle names such as
+    // "Pulsus Builtin Device.aaxplugin" then turn into extra script names. Patch
+    // only the extracted target copy so local/CI validation can pass paths with
+    // spaces without modifying the downloaded archive.
+    let normalized = content.replace(
+        "eval \"$ruby_path $(realpath $runsuite_path) $@\" ",
+        "\"$ruby_path\" \"$(realpath \"$runsuite_path\")\" \"$@\" ",
+    );
+    let normalized = normalized.replace(
+        "eval \"$ruby_path $(realpath $runsuite_path) $@\"",
+        "\"$ruby_path\" \"$(realpath \"$runsuite_path\")\" \"$@\"",
+    );
+    if normalized != content {
+        fs::write(path, normalized).map_err(|err| {
+            format!(
+                "failed to write patched AAX validator DTT launcher {}: {err}",
+                path.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
 fn patch_aax_validator_run_all_tests_script(path: &Path) -> Result<()> {
     let content = fs::read_to_string(path).map_err(|err| {
         format!(
@@ -1494,6 +1560,76 @@ fn patch_aax_validator_run_all_tests_script(path: &Path) -> Result<()> {
         fs::write(path, normalized).map_err(|err| {
             format!(
                 "failed to write patched AAX validator RunAllTests script {}: {err}",
+                path.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn patch_aax_validator_bundle_path_scripts(root: &Path) -> Result<()> {
+    for scripts_dir in [
+        root.join("DTT").join("sources").join("scripts"),
+        root.join("DigiShell").join("DTT").join("sources").join("scripts"),
+        root.join("AAXValidatorResources")
+            .join("Tools")
+            .join("DTT")
+            .join("sources")
+            .join("scripts"),
+        root.join("Frameworks")
+            .join("AAXValidatorResources")
+            .join("Tools")
+            .join("DTT")
+            .join("sources")
+            .join("scripts"),
+        root.join("DigiShell")
+            .join("AAXValidatorResources")
+            .join("Tools")
+            .join("DTT")
+            .join("sources")
+            .join("scripts"),
+    ] {
+        if !scripts_dir.exists() {
+            continue;
+        }
+        for script in [
+            "DSH_AAXVAL_Support_IDs.rb",
+            "DSH_AAXVAL_Support_General.rb",
+            "DSH_AAXVAL_Data_Model.rb",
+        ] {
+            let path = scripts_dir.join(script);
+            if path.exists() {
+                patch_aax_validator_bundle_path_script(&path)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn patch_aax_validator_bundle_path_script(path: &Path) -> Result<()> {
+    let content = fs::read_to_string(path).map_err(|err| {
+        format!(
+            "failed to read AAX validator script {}: {err}",
+            path.display()
+        )
+    })?;
+    // Several 2024.6 DTT scripts still default to Avid sample bundles
+    // (Trim.aaxplugin / LoadUnloadFail.aaxplugin) even when `runtest` receives an
+    // explicit `path`. The `runtest` command schema does not accept `bundle_path`,
+    // so patch the extracted script defaults to the WRAC-staged bundle instead.
+    let normalized = content
+        .replace(
+            ":bundle_path => ['Trim.aaxplugin']",
+            ":bundle_path => [ENV.fetch('WRAC_AAXPLUGIN_PATH', 'Trim.aaxplugin')]",
+        )
+        .replace(
+            ":bundle_path => ['LoadUnloadFail.aaxplugin']",
+            ":bundle_path => [ENV.fetch('WRAC_AAXPLUGIN_PATH', 'LoadUnloadFail.aaxplugin')]",
+        );
+    if normalized != content {
+        fs::write(path, normalized).map_err(|err| {
+            format!(
+                "failed to write patched AAX validator script {}: {err}",
                 path.display()
             )
         })?;
@@ -1541,7 +1677,7 @@ fn normalize_macos_aax_validator_sysinfo(root: &Path) -> Result<()> {
     Ok(())
 }
 
-fn normalize_windows_aax_validator_dtt_config(root: &Path) -> Result<()> {
+fn normalize_aax_validator_dtt_config(root: &Path) -> Result<()> {
     // User-supplied roots may point either at the archive root or directly at the
     // AAXValidatorResources root. Normalize every matching extracted config so both
     // layouts behave the same without asking users to repack Avid's archive.
@@ -1550,27 +1686,33 @@ fn normalize_windows_aax_validator_dtt_config(root: &Path) -> Result<()> {
             .join("AAXValidatorResources")
             .join("Main.valconfig"),
         root.join("AAXValidatorResources").join("Main.valconfig"),
+        root.join("Frameworks")
+            .join("AAXValidator.framework")
+            .join("Versions")
+            .join("A")
+            .join("Resources")
+            .join("Main.valconfig"),
     ] {
         if candidate.exists() {
-            normalize_windows_aax_validator_main_config(&candidate)?;
+            normalize_aax_validator_main_config(&candidate)?;
         }
     }
     Ok(())
 }
 
-fn normalize_windows_aax_validator_main_config(path: &Path) -> Result<()> {
+fn normalize_aax_validator_main_config(path: &Path) -> Result<()> {
     let content = fs::read_to_string(path).map_err(|err| {
         format!(
             "failed to read AAX validator config {}: {err}",
             path.display()
         )
     })?;
-    // Avid's Windows 2024.6 validator package uses POSIX single quotes for the
-    // DTT process arguments in Main.valconfig. `cmd.exe` passes those quotes
-    // through literally, so DTT does not receive `bundle_path` and its helper
-    // scripts fall back to sample plug-in names such as `Trim.aaxplugin`. Patch
-    // only the extracted target/ copy and use the same escaped double-quote style
-    // already used by the validator's other Windows process definitions.
+    // Avid's 2024.6 validator package uses POSIX single quotes for the DTT process
+    // arguments in Main.valconfig. Windows passes those quotes through literally;
+    // macOS DTT logs the argument but does not treat it as a script option. In both
+    // cases helper scripts fall back to sample plug-in names such as Trim.aaxplugin.
+    // Patch only the extracted target/ copy and use the escaped double-quote style
+    // already used by the validator's other process definitions.
     let normalized = content
         .replace(
             "elem: \"\\'bundle_path=$AAXVAL_PARAM_AAXPLUGIN$\\'\"",

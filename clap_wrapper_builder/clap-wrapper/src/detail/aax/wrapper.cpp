@@ -507,6 +507,10 @@ ClapAsAAX::~ClapAsAAX()
   {
     this->stopProcessing();
     this->deactivatePlugin();
+    if (_library)
+    {
+      _library->unbindRunLoopThread();
+    }
   }
   ClapAsAAXRegistry::Unregister(this);
 }
@@ -553,6 +557,11 @@ AAX_Result ClapAsAAX::EffectInit()
   LOGINFO(fmt::format("AAX Effect Init for '{}'", m.StdString().c_str()));
 
   _library = CLAPAAX::guarantee_clap();
+  if (!_library->bindRunLoopThread())
+  {
+    LOGINFO("AAX Effect Init failed: failed to bind WRAC run loop thread");
+    return AAX_ERROR_NOT_INITIALIZED;
+  }
   _plugin = Clap::Plugin::createInstance(_library->_pluginFactory, m.StdString(), this);
 
   if (_plugin)
@@ -628,6 +637,17 @@ AAX_Result ClapAsAAX::EffectInit()
       // set signallatency
       _aax_ctrl->SetSignalLatency(0);
     }
+    else
+    {
+      _library->unbindRunLoopThread();
+      _plugin.reset();
+      return AAX_ERROR_NOT_INITIALIZED;
+    }
+  }
+  else
+  {
+    _library->unbindRunLoopThread();
+    return AAX_ERROR_NOT_INITIALIZED;
   }
   AAX_ASSERT(_activated == false);
   return AAX_SUCCESS;

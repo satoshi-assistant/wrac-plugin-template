@@ -136,14 +136,26 @@ WrapAsAUV2::WrapAsAUV2(AUV2_Type type, const std::string &clapname, const std::s
        */
 
       // pffffrzz();  // <- enable this to have a hook to attach a debugger
-      _plugin = Clap::Plugin::createInstance(_library._pluginFactory, _desc->id, this);
-      if (_plugin)
+      const auto runLoopBound = _library.bindRunLoopThread();
+      if (!runLoopBound)
       {
-        _plugin->initialize();
+        std::cout << "[clap-wrapper] ERROR: failed to bind WRAC run loop thread" << std::endl;
+        _desc = nullptr;
+        return;
+      }
+      _plugin = Clap::Plugin::createInstance(_library._pluginFactory, _desc->id, this);
+      if (_plugin && _plugin->initialize())
+      {
         _os_attached.on();
       }
       else
       {
+        if (_plugin)
+        {
+          _plugin->terminate();
+          _plugin.reset();
+        }
+        _library.unbindRunLoopThread();
         std::cout << "[clap-wrapper] ERROR: the clap did not create an instance with id " << _desc->id
                   << std::endl;
         // this will exit in WrapAsAUV2::Initialize() with an error
@@ -172,6 +184,7 @@ WrapAsAUV2::~WrapAsAUV2()
     _os_attached.off();
     _plugin->terminate();
     _plugin.reset();
+    _library.unbindRunLoopThread();
   }
   if (_current_program_name)
   {
