@@ -977,15 +977,21 @@ pub(crate) fn validate_plugin_target(
             let vst3 = ctx.vst3_bundle(profile);
             ensure_exists(&vst3, "VST3 artifact")?;
             let validator = ensure_vst3_validator(ctx)?;
-            run(Command::new(validator)
-                .env("WRAC_PLUGIN_VALIDATOR", "1")
-                .arg(&vst3)
-                .current_dir(&ctx.root))?;
-            // The VST3 validator checks format behavior but does not prove that the
-            // host-visible class IDs match package metadata. moduleinfotool reads the built
-            // bundle metadata, so this catches build.rs/wrapper byte-order regressions at the
-            // artifact boundary instead of adding a product-policy readiness rule.
-            validate_vst3_component_ids(ctx, &vst3)?;
+            let output = run_output(
+                Command::new(validator)
+                    .env("WRAC_PLUGIN_VALIDATOR", "1")
+                    .arg(&vst3)
+                    .current_dir(&ctx.root),
+            )?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            print!("{stdout}");
+            eprint!("{stderr}");
+            // The VST3 validator checks format behavior and prints the host-visible class IDs
+            // while scanning the built bundle. Reusing that output keeps the artifact-boundary
+            // byte-order check without running Steinberg's moduleinfotool, which can keep WRAC
+            // Windows GUI/runtime dependencies alive after validation and hang CI.
+            validate_vst3_component_ids(ctx, &vst3, &stdout, &stderr)?;
         }
         ValidateTarget::Au => {
             ensure_no_system_au_conflict(ctx)?;
@@ -1020,16 +1026,16 @@ pub(crate) fn validate_plugin_target(
     Ok(())
 }
 
-fn validate_vst3_component_ids(ctx: &Context, vst3: &Path) -> Result<()> {
-    let moduleinfotool = ensure_vst3_moduleinfotool(ctx)?;
-    let output = run_output(
-        Command::new(moduleinfotool)
-            .args(["-create", "-version", &ctx.metadata.version, "-path"])
-            .arg(vst3)
-            .current_dir(&ctx.root),
-    )?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let actual = parse_moduleinfo_cids(&stdout);
+fn validate_vst3_component_ids(
+    ctx: &Context,
+    vst3: &Path,
+    stdout: &str,
+    stderr: &str,
+) -> Result<()> {
+    let actual = parse_vst3_validator_cids(stdout)
+        .into_iter()
+        .chain(parse_vst3_validator_cids(stderr))
+        .collect::<Vec<_>>();
     let expected = ctx
         .metadata
         .plugins
@@ -1039,7 +1045,7 @@ fn validate_vst3_component_ids(ctx: &Context, vst3: &Path) -> Result<()> {
 
     if actual != expected {
         return Err(format!(
-            "VST3 component ID mismatch for {}: metadata={expected:?}, moduleinfo={actual:?}",
+            "VST3 component ID mismatch for {}: metadata={expected:?}, validator={actual:?}",
             vst3.display()
         )
         .into());
@@ -1049,12 +1055,11 @@ fn validate_vst3_component_ids(ctx: &Context, vst3: &Path) -> Result<()> {
     Ok(())
 }
 
-fn parse_moduleinfo_cids(output: &str) -> Vec<String> {
+fn parse_vst3_validator_cids(output: &str) -> Vec<String> {
     output
         .lines()
-        .filter_map(|line| line.split_once("\"CID\": \""))
-        .filter_map(|(_, rest)| rest.split_once('"'))
-        .map(|(cid, _)| normalize_vst3_cid(cid))
+        .filter_map(|line| line.trim_start().split_once("cid = "))
+        .map(|(_, cid)| normalize_vst3_cid(cid))
         .collect()
 }
 
@@ -1992,43 +1997,6 @@ fn ensure_vst3_validator(ctx: &Context) -> Result<PathBuf> {
     }
 }
 
-fn ensure_vst3_moduleinfotool(ctx: &Context) -> Result<PathBuf> {
-    ensure_vst3_sdk_input(ctx)?;
-
-    let executable = if ctx.platform == Platform::Windows {
-        "moduleinfotool.exe"
-    } else {
-        "moduleinfotool"
-    };
-    let moduleinfotool_bin_dir = ctx.target_dir.join("vst3sdk-validator").join("bin");
-    let moduleinfotool = moduleinfotool_bin_dir.join("Debug").join(executable);
-    let moduleinfotool_without_config = moduleinfotool_bin_dir.join(executable);
-
-    if moduleinfotool.exists() {
-        return Ok(moduleinfotool);
-    }
-    if moduleinfotool_without_config.exists() {
-        return Ok(moduleinfotool_without_config);
-    }
-
-    let build_dir = ctx.target_dir.join("vst3sdk-validator");
-    run(Command::new("cmake")
-        .arg("--build")
-        .arg(&build_dir)
-        .arg("--target")
-        .arg("moduleinfotool")
-        .arg("--config")
-        .arg("Debug")
-        .current_dir(&ctx.root))?;
-
-    if moduleinfotool.exists() {
-        Ok(moduleinfotool)
-    } else {
-        ensure_exists(&moduleinfotool_without_config, "VST3 moduleinfotool")?;
-        Ok(moduleinfotool_without_config)
-    }
-}
-
 pub(crate) fn clean(ctx: &Context) -> Result<()> {
     remove_if_exists(&ctx.wrac_dir())?;
     Ok(())
@@ -2199,24 +2167,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_vst3_moduleinfo_cids_from_logged_output() {
+    fn parses_vst3_validator_cids_from_logged_output() {
         let output = r#"
-clap-wrapper log before JSON
-{
-  "Classes": [
-    {
-      "CID": "822011CA37EC5CEF92D7EC7E67207195",
-      "Name": "WRAC Gain",
-    },
-    {
-      "CID": "ffff664c-b963-53e6-87cc-2a7ceb29674b",
-    },
-  ],
-}
+* Scanning classes...
+  Class Info 0:
+    name = WRAC Gain
+    cid = 822011CA37EC5CEF92D7EC7E67207195
+  Class Info 1:
+    name = Companion Controller
+    cid = ffff664c-b963-53e6-87cc-2a7ceb29674b
 "#;
 
         assert_eq!(
-            parse_moduleinfo_cids(output),
+            parse_vst3_validator_cids(output),
             vec![
                 "822011CA37EC5CEF92D7EC7E67207195".to_string(),
                 "FFFF664CB96353E687CC2A7CEB29674B".to_string(),
