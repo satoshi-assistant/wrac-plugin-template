@@ -68,25 +68,58 @@ pub(crate) fn build_gui(ctx: &Context) -> Result<()> {
         );
         return Ok(());
     }
-    // build.rs embeds src-gui/dist into the plugin binary, so the frontend must be
-    // finalized here first. Reversing the order risks bundling a stale or empty dist.
+    let package = read_package_json(&package_json)?;
+    let package_name = package_name(&package, &package_json)?;
+    let dependency_names = workspace_dependency_names(&package);
+    // build.rs embeds src-gui/dist into the plugin binary. Workspace packages such as
+    // @novonotes/webview-bridge also need their dist before the GUI typecheck runs.
     run(Command::new(pnpm_command(ctx.platform))
         .arg("install")
-        .current_dir(ctx.gui_dir()))?;
+        .current_dir(&ctx.root))?;
+    for dependency_name in dependency_names {
+        run(Command::new(pnpm_command(ctx.platform))
+            .args(["--filter", &dependency_name, "run", "--if-present", "build"])
+            .current_dir(&ctx.root))?;
+    }
     run(Command::new(pnpm_command(ctx.platform))
-        .args(["run", "build"])
-        .current_dir(ctx.gui_dir()))?;
+        .args(["--filter", &package_name, "run", "build"])
+        .current_dir(&ctx.root))?;
     Ok(())
 }
 
 fn has_package_script(package_json: &Path, script: &str) -> Result<bool> {
-    let json: Value = serde_json::from_slice(&fs::read(package_json)?)?;
+    let json = read_package_json(package_json)?;
     Ok(json
         .get("scripts")
         .and_then(Value::as_object)
         .and_then(|scripts| scripts.get(script))
         .and_then(Value::as_str)
         .is_some())
+}
+
+fn read_package_json(package_json: &Path) -> Result<Value> {
+    Ok(serde_json::from_slice(&fs::read(package_json)?)?)
+}
+
+fn package_name(json: &Value, package_json: &Path) -> Result<String> {
+    json.get("name")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| format!("package name not found in {}", package_json.display()).into())
+}
+
+fn workspace_dependency_names(json: &Value) -> Vec<String> {
+    json.get("dependencies")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flat_map(|dependencies| dependencies.iter())
+        .filter_map(|(name, version)| {
+            version
+                .as_str()
+                .is_some_and(|version| version.starts_with("workspace:"))
+                .then(|| name.to_owned())
+        })
+        .collect()
 }
 
 fn pnpm_command(platform: Platform) -> &'static str {
