@@ -1090,6 +1090,11 @@ fn run_aax_validator_dtt(ctx: &Context, aax: &Path, results_dir: &Path) -> Resul
             ))
             .arg("--arg")
             .arg(format!(
+                "aaxplugin_path={}",
+                aax_validator_cli_path(ctx.platform, aax)
+            ))
+            .arg("--arg")
+            .arg(format!(
                 "out_path={}",
                 aax_validator_cli_path(ctx.platform, &test_dir)
             ))
@@ -1410,6 +1415,7 @@ fn ensure_aax_validator_dtt(ctx: &Context) -> Result<PathBuf> {
     let root = aax_validator_dsh_root(ctx)?;
     let dtt = aax_validator_dtt_runner(&root, ctx.platform)?;
     ensure_exists(&dtt, "AAX validator DTT runner")?;
+    patch_aax_validator_run_all_tests(&root)?;
     if ctx.platform == Platform::Windows {
         normalize_windows_aax_validator_dtt_config(&root)?;
     }
@@ -1430,6 +1436,70 @@ fn ensure_aax_validator_dtt(ctx: &Context) -> Result<PathBuf> {
             .current_dir(&ctx.root))?;
     }
     Ok(dtt)
+}
+
+fn patch_aax_validator_run_all_tests(root: &Path) -> Result<()> {
+    for candidate in [
+        root.join("DigiShell")
+            .join("DTT")
+            .join("sources")
+            .join("scripts")
+            .join("ValidatorRunAllTests.rb"),
+        root.join("DTT")
+            .join("sources")
+            .join("scripts")
+            .join("ValidatorRunAllTests.rb"),
+        root.join("DigiShell")
+            .join("AAXValidatorResources")
+            .join("Tools")
+            .join("DTT")
+            .join("sources")
+            .join("scripts")
+            .join("ValidatorRunAllTests.rb"),
+        root.join("AAXValidatorResources")
+            .join("Tools")
+            .join("DTT")
+            .join("sources")
+            .join("scripts")
+            .join("ValidatorRunAllTests.rb"),
+    ] {
+        if candidate.exists() {
+            patch_aax_validator_run_all_tests_script(&candidate)?;
+        }
+    }
+    Ok(())
+}
+
+fn patch_aax_validator_run_all_tests_script(path: &Path) -> Result<()> {
+    let content = fs::read_to_string(path).map_err(|err| {
+        format!(
+            "failed to read AAX validator RunAllTests script {}: {err}",
+            path.display()
+        )
+    })?;
+    // `findaaxplugins` is convenient for system-wide validation, but on Windows
+    // DTT 2024.6 can return `aaxplugin_paths` as an empty string for an otherwise
+    // valid developer bundle staged under a temp directory. The validator command
+    // already knows the exact bundle to test, so patch the extracted DTT script to
+    // accept that path directly and avoid an unnecessary discovery step.
+    let normalized = content
+        .replace(
+            "        :out_path           => [Dir.tmpdir()],\n        :mode               => ['all',['all', 'fast', 'required', 'info', 'tests']],",
+            "        :out_path           => [Dir.tmpdir()],\n        :aaxplugin_path     => [''], #direct plug-in bundle path supplied by wrac_xtask\n        :mode               => ['all',['all', 'fast', 'required', 'info', 'tests']],",
+        )
+        .replace(
+            "    plugins = dsh.findaaxplugins(pi_path_fixed)\n    plugins['aaxplugin_paths'].each do |aaxplugin_path|\n      \"  #{aaxplugin_path}\".log_status\n    end",
+            "    if !aaxplugin_path.empty?\n      plugins = {'aaxplugin_paths' => [aaxplugin_path]}\n    else\n      plugins = dsh.findaaxplugins(pi_path_fixed)\n      if plugins['aaxplugin_paths'].is_a?(String)\n        plugins['aaxplugin_paths'] = plugins['aaxplugin_paths'].empty? ? [] : [plugins['aaxplugin_paths']]\n      end\n    end\n    plugins['aaxplugin_paths'].each do |aaxplugin_path|\n      \"  #{aaxplugin_path}\".log_status\n    end",
+        );
+    if normalized != content {
+        fs::write(path, normalized).map_err(|err| {
+            format!(
+                "failed to write patched AAX validator RunAllTests script {}: {err}",
+                path.display()
+            )
+        })?;
+    }
+    Ok(())
 }
 
 fn normalize_macos_aax_validator_sysinfo(root: &Path) -> Result<()> {
