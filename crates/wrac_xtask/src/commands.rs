@@ -56,8 +56,16 @@ const AAX_VALIDATOR_DTT_TIMEOUT_FACTOR: u32 = 10;
 
 pub(crate) fn build_gui(ctx: &Context) -> Result<()> {
     println!("Building GUI...");
-    if !ctx.gui_dir().join("package.json").exists() {
+    let package_json = ctx.gui_dir().join("package.json");
+    if !package_json.exists() {
         println!("No src-gui/package.json found; skipping GUI build.");
+        return Ok(());
+    }
+    if !has_package_script(&package_json, "build")? {
+        println!(
+            "No build script found in {}; skipping GUI build.",
+            package_json.display()
+        );
         return Ok(());
     }
     // build.rs embeds src-gui/dist into the plugin binary, so the frontend must be
@@ -69,6 +77,16 @@ pub(crate) fn build_gui(ctx: &Context) -> Result<()> {
         .args(["run", "build"])
         .current_dir(ctx.gui_dir()))?;
     Ok(())
+}
+
+fn has_package_script(package_json: &Path, script: &str) -> Result<bool> {
+    let json: Value = serde_json::from_slice(&fs::read(package_json)?)?;
+    Ok(json
+        .get("scripts")
+        .and_then(Value::as_object)
+        .and_then(|scripts| scripts.get(script))
+        .and_then(Value::as_str)
+        .is_some())
 }
 
 fn pnpm_command(platform: Platform) -> &'static str {
