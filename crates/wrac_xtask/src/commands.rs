@@ -1482,15 +1482,14 @@ fn patch_aax_validator_run_all_tests_script(path: &Path) -> Result<()> {
     // valid developer bundle staged under a temp directory. The validator command
     // already knows the exact bundle to test, so patch the extracted DTT script to
     // accept that path directly and avoid an unnecessary discovery step.
-    let normalized = content
-        .replace(
-            "        :out_path           => [Dir.tmpdir()],\n        :mode               => ['all',['all', 'fast', 'required', 'info', 'tests']],",
-            "        :out_path           => [Dir.tmpdir()],\n        :aaxplugin_path     => [''], #direct plug-in bundle path supplied by wrac_xtask\n        :mode               => ['all',['all', 'fast', 'required', 'info', 'tests']],",
-        )
-        .replace(
-            "    plugins = dsh.findaaxplugins(pi_path_fixed)\n    plugins['aaxplugin_paths'].each do |aaxplugin_path|\n      \"  #{aaxplugin_path}\".log_status\n    end",
-            "    if !aaxplugin_path.empty?\n      plugins = {'aaxplugin_paths' => [aaxplugin_path]}\n    else\n      plugins = dsh.findaaxplugins(pi_path_fixed)\n      if plugins['aaxplugin_paths'].is_a?(String)\n        plugins['aaxplugin_paths'] = plugins['aaxplugin_paths'].empty? ? [] : [plugins['aaxplugin_paths']]\n      end\n    end\n    plugins['aaxplugin_paths'].each do |aaxplugin_path|\n      \"  #{aaxplugin_path}\".log_status\n    end",
-        );
+    let normalized = content.replace(
+        "        :out_path           => [Dir.tmpdir()],\n        :mode               => ['all',['all', 'fast', 'required', 'info', 'tests']],",
+        "        :out_path           => [Dir.tmpdir()],\n        :aaxplugin_path     => [''], #direct plug-in bundle path supplied by wrac_xtask\n        :mode               => ['all',['all', 'fast', 'required', 'info', 'tests']],",
+    );
+    let normalized = normalized.replace(
+        "    plugins = dsh.findaaxplugins(pi_path_fixed)",
+        "    if !aaxplugin_path.empty?\n      plugins = {'aaxplugin_paths' => [aaxplugin_path]}\n    else\n      plugins = dsh.findaaxplugins(pi_path_fixed)\n      if plugins['aaxplugin_paths'].is_a?(String)\n        plugins['aaxplugin_paths'] = plugins['aaxplugin_paths'].empty? ? [] : [plugins['aaxplugin_paths']]\n      end\n    end",
+    );
     if normalized != content {
         fs::write(path, normalized).map_err(|err| {
             format!(
