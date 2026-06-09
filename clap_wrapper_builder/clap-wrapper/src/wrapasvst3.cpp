@@ -153,19 +153,30 @@ bool ClapAsVst3::createPluginInFactoryContext()
     return true;
   }
 
+  if (!bindRunLoopThreadIfNeeded())
+  {
+    return false;
+  }
+
+  _plugin = Clap::Plugin::createInstance(*_library, _libraryIndex, this);
+  if (!_plugin) return false;
+
+  return true;
+}
+
+bool ClapAsVst3::bindRunLoopThreadIfNeeded()
+{
+  if (_runLoopThreadBound)
+  {
+    return true;
+  }
+
   if (!_library->bindRunLoopThread())
   {
     return false;
   }
+
   _runLoopThreadBound = true;
-
-  _plugin = Clap::Plugin::createInstance(*_library, _libraryIndex, this);
-  if (!_plugin)
-  {
-    unbindRunLoopThreadIfNeeded();
-    return false;
-  }
-
   return true;
 }
 
@@ -176,6 +187,23 @@ void ClapAsVst3::unbindRunLoopThreadIfNeeded()
     _library->unbindRunLoopThread();
     _runLoopThreadBound = false;
   }
+}
+
+ClapAsVst3::~ClapAsVst3()
+{
+  if (_plugin)
+  {
+    _os_attached.off();
+    if (_active)
+    {
+      _plugin->deactivate();
+      _active = false;
+    }
+    _plugin->terminate();
+    _plugin.reset();
+  }
+
+  unbindRunLoopThreadIfNeeded();
 }
 
 tresult PLUGIN_API ClapAsVst3::initialize(FUnknown *context)
@@ -221,7 +249,6 @@ tresult PLUGIN_API ClapAsVst3::terminate()
     }
     _plugin->terminate();
     _plugin.reset();
-    unbindRunLoopThreadIfNeeded();
   }
 
   return super::terminate();

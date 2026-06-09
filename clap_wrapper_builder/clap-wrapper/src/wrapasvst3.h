@@ -146,6 +146,7 @@ class ClapAsVst3 : public Steinberg::Vst::SingleComponentEffect,
     , _os_attached([this] { os::attach(this); }, [this] { os::detach(this); })
   {
   }
+  ~ClapAsVst3() override;
 
   //---from IComponent-----------------------
   tresult PLUGIN_API initialize(FUnknown *context) override;
@@ -378,6 +379,7 @@ class ClapAsVst3 : public Steinberg::Vst::SingleComponentEffect,
   bool checkMIDIDialectSupport();
 
  private:
+  bool bindRunLoopThreadIfNeeded();
   bool createPluginInFactoryContext();
   void unbindRunLoopThreadIfNeeded();
 

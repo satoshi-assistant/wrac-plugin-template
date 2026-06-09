@@ -481,6 +481,8 @@ ClapAsAAX::ClapAsAAX()
   , os::IPlugObject()
   , _os_attached([this] { os::attach(this); }, [this] { os::detach(this); })
 {
+  _library = CLAPAAX::guarantee_clap();
+  bindRunLoopThreadIfNeeded();
   ClapAsAAXRegistry::Register(this);
   _activated = false;
 }
@@ -494,6 +496,8 @@ ClapAsAAX::ClapAsAAX(const char *effectid, int busconfig)
   , _predetermined_effectid(effectid)
   , _predetermined_busconfig(busconfig)
 {
+  _library = CLAPAAX::guarantee_clap();
+  bindRunLoopThreadIfNeeded();
   ClapAsAAXRegistry::Register(this);
   _activated = false;
 }
@@ -507,12 +511,34 @@ ClapAsAAX::~ClapAsAAX()
   {
     this->stopProcessing();
     this->deactivatePlugin();
-    if (_library)
-    {
-      _library->unbindRunLoopThread();
-    }
   }
+  unbindRunLoopThreadIfNeeded();
   ClapAsAAXRegistry::Unregister(this);
+}
+
+bool ClapAsAAX::bindRunLoopThreadIfNeeded()
+{
+  if (_runLoopThreadBound)
+  {
+    return true;
+  }
+
+  if (!_library || !_library->bindRunLoopThread())
+  {
+    return false;
+  }
+
+  _runLoopThreadBound = true;
+  return true;
+}
+
+void ClapAsAAX::unbindRunLoopThreadIfNeeded()
+{
+  if (_runLoopThreadBound && _library)
+  {
+    _library->unbindRunLoopThread();
+    _runLoopThreadBound = false;
+  }
 }
 
 static void build_config_request(clap_audio_port_configuration_request *req, uint32_t numchannels,
@@ -556,10 +582,9 @@ AAX_Result ClapAsAAX::EffectInit()
 
   LOGINFO(fmt::format("AAX Effect Init for '{}'", m.StdString().c_str()));
 
-  _library = CLAPAAX::guarantee_clap();
-  if (!_library->bindRunLoopThread())
+  if (!_library || !_runLoopThreadBound)
   {
-    LOGINFO("AAX Effect Init failed: failed to bind WRAC run loop thread");
+    LOGINFO("AAX Effect Init failed: WRAC run loop thread is not bound");
     return AAX_ERROR_NOT_INITIALIZED;
   }
   _plugin = Clap::Plugin::createInstance(_library->_pluginFactory, m.StdString(), this);
@@ -639,14 +664,12 @@ AAX_Result ClapAsAAX::EffectInit()
     }
     else
     {
-      _library->unbindRunLoopThread();
       _plugin.reset();
       return AAX_ERROR_NOT_INITIALIZED;
     }
   }
   else
   {
-    _library->unbindRunLoopThread();
     return AAX_ERROR_NOT_INITIALIZED;
   }
   AAX_ASSERT(_activated == false);
