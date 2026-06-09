@@ -926,12 +926,34 @@ pub(crate) fn validate_plugin_target(
             let clap = ctx.clap_bundle(profile);
             ensure_exists(&clap, "CLAP artifact")?;
             let validator = ensure_clap_validator(ctx)?;
-            run(Command::new(validator)
+            let mut command = Command::new(validator);
+            command
                 .env("WRAC_PLUGIN_VALIDATOR", "1")
                 .arg("validate")
                 .arg(&clap)
-                .arg("--only-failed")
-                .current_dir(&ctx.root))?;
+                .arg("--only-failed");
+            if let Some(filter) = ctx
+                .metadata
+                .validation
+                .clap_validator
+                .skip_test_filter
+                .as_deref()
+            {
+                println!(
+                    "CLAP validator skip filter: {filter} ({})",
+                    ctx.metadata
+                        .validation
+                        .clap_validator
+                        .skip_reason
+                        .as_deref()
+                        .unwrap_or("no reason provided")
+                );
+                command
+                    .arg("--test-filter")
+                    .arg(filter)
+                    .arg("--invert-filter");
+            }
+            run(command.current_dir(&ctx.root))?;
         }
         ValidateTarget::Vst3 => {
             let vst3 = ctx.vst3_bundle(profile);

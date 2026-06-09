@@ -184,6 +184,14 @@ tresult PLUGIN_API ClapAsVst3::initialize(FUnknown *context)
   context->queryInterface(Vst::IHostApplication::iid, (void **)&vst3HostApplication);
   if (result == kResultOk)
   {
+    // Some validators and hosts call initialize() again on the same VST3
+    // wrapper object after terminate(). terminate() releases the CLAP instance,
+    // so recreate it in the same factory/run-loop context before forwarding
+    // CLAP plugin initialization.
+    if (!_plugin && !createPluginInFactoryContext())
+    {
+      return kResultFalse;
+    }
     result = (_plugin && _plugin->initialize()) ? kResultOk : kResultFalse;
     if (result != kResultOk)
     {
