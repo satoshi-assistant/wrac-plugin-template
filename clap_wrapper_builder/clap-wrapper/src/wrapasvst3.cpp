@@ -251,6 +251,10 @@ tresult PLUGIN_API ClapAsVst3::terminate()
     _plugin.reset();
   }
 
+  // Keep the WRAC RunLoop binding until the VST3 wrapper object is destroyed.
+  // JUCE keeps ScopedRunLoop as a component/controller member, so a validator's
+  // terminate/initialize cycle must not rebind the UI/run-loop thread from
+  // initialize().
   return super::terminate();
 }
 

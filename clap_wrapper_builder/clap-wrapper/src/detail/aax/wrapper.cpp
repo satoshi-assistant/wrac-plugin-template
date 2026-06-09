@@ -481,6 +481,8 @@ ClapAsAAX::ClapAsAAX()
   , os::IPlugObject()
   , _os_attached([this] { os::attach(this); }, [this] { os::detach(this); })
 {
+  // JUCE keeps ScopedJuceInitialiser_GUI as an AAX processor member. Bind WRAC's
+  // RunLoop for the same wrapper-object lifetime instead of waiting for EffectInit().
   _library = CLAPAAX::guarantee_clap();
   bindRunLoopThreadIfNeeded();
   ClapAsAAXRegistry::Register(this);
@@ -496,6 +498,8 @@ ClapAsAAX::ClapAsAAX(const char *effectid, int busconfig)
   , _predetermined_effectid(effectid)
   , _predetermined_busconfig(busconfig)
 {
+  // JUCE keeps ScopedJuceInitialiser_GUI as an AAX processor member. Bind WRAC's
+  // RunLoop for the same wrapper-object lifetime instead of waiting for EffectInit().
   _library = CLAPAAX::guarantee_clap();
   bindRunLoopThreadIfNeeded();
   ClapAsAAXRegistry::Register(this);
