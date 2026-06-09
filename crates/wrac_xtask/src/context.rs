@@ -68,7 +68,14 @@ impl Context {
         if package_gui_dir.join("package.json").exists() {
             return package_gui_dir;
         }
-        self.plugin_root.join("src-gui")
+        let plugin_root_gui_dir = self.plugin_root.join("src-gui");
+        if plugin_root_gui_dir.join("package.json").exists() {
+            return plugin_root_gui_dir;
+        }
+        // Older in-repo plugins may keep the frontend package at the plugin root
+        // while the Rust crate lives in src-plugin. Keep build-gui responsible
+        // for that layout so release builds never depend on checked-in dist files.
+        self.plugin_root.clone()
     }
 
     pub(crate) fn plugin_manifest(&self) -> PathBuf {
