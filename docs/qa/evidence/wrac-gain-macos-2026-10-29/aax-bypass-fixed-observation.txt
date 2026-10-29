@@ -1,0 +1,12 @@
+Pro Tools Developer 23.6.0.5 / AAX Native / WRAC Gain 0.1.0
+Candidate: register the AAX SDK cDefaultMasterBypassID for host bypass.
+Input: stereo, 1 kHz sine, -20.0 dBFS peak; gain: -6.0 dB.
+The host peak display was reset before each measurement.
+
+Host bypass off: -26.0 dBFS.
+Host bypass on:  -20.0 dBFS; Effect Bypass and Parameter Bypass are On.
+Host bypass off again: -26.0 dBFS.
+During playback, off -> on -> off: -26.0 -> -20.0 -> -26.0 dBFS.
+
+Measurements use rounded host peak meters, not sample comparisons.
+The fallback for plugins without a CLAP bypass parameter was not tested.

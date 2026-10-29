@@ -1,0 +1,18 @@
+Apple Silicon
+[clap-wrapper] auv2: Initialized 'com.your-company.wrac-gain' / 'WRAC Gain' / '0.1.0'
+PASS: latency reported, notified and applied across restarts
+PASS: 9 silence-flagged blocks contained zero samples
+
+Rosetta / Intel
+[clap-wrapper] auv2: Initialized 'com.your-company.wrac-gain' / 'WRAC Gain' / '0.1.0'
+PASS: latency reported, notified and applied across restarts
+PASS: 10 silence-flagged blocks contained zero samples
+
+Negative control: deliberately uncleared output (failure expected)
+[clap-wrapper] auv2: Initialized 'com.your-company.wrac-gain' / 'WRAC Gain' / '0.1.0'
+FAIL: Silence flag with nonzero output
+
+Restored AU build
+[clap-wrapper] auv2: Initialized 'com.your-company.wrac-gain' / 'WRAC Gain' / '0.1.0'
+PASS: latency reported, notified and applied across restarts
+PASS: 17 silence-flagged blocks contained zero samples

@@ -1,0 +1,90 @@
+diff --git a/clap_wrapper_builder/tests/README.md b/clap_wrapper_builder/tests/README.md
+index 77829ff..3705f08 100644
+--- a/clap_wrapper_builder/tests/README.md
++++ b/clap_wrapper_builder/tests/README.md
+@@ -53,0 +54,4 @@ than a parameter because the delay setting is not a host parameter.
++
++During concurrent rendering it also checks that every block marked silent contains zero
++samples in both channels. It reports SKIP for this check when no silent block is observed;
++the test does not guarantee that a render overlaps every restart.
+diff --git a/clap_wrapper_builder/tests/au_latency_restart.cpp b/clap_wrapper_builder/tests/au_latency_restart.cpp
+index d1ded2d..5ec470e 100644
+--- a/clap_wrapper_builder/tests/au_latency_restart.cpp
++++ b/clap_wrapper_builder/tests/au_latency_restart.cpp
+@@ -15,0 +16 @@
++#include <algorithm>
+@@ -16,0 +18 @@
++#include <chrono>
+@@ -38,0 +41,2 @@ static std::atomic<int64_t> gImpulseAt{-1};
++// Continuous input makes a stale output buffer observable during a restart.
++static std::atomic<bool> gContinuousInput{false};
+@@ -43,0 +48 @@ static OSStatus input(void *, AudioUnitRenderActionFlags *, const AudioTimeStamp
++  const auto continuous = gContinuousInput.load();
+@@ -46 +51,2 @@ static OSStatus input(void *, AudioUnitRenderActionFlags *, const AudioTimeStamp
+-      static_cast<float *>(buffers->mBuffers[c].mData)[i] = (start + i == impulseAt) ? 1.0f : 0.0f;
++      static_cast<float *>(buffers->mBuffers[c].mData)[i] =
++          continuous ? 0.125f : ((start + i == impulseAt) ? 1.0f : 0.0f);
+@@ -61,0 +68,2 @@ struct Renderer
++  int silenceBlocksChecked = 0;
++  int signalBlocks = 0;
+@@ -63,2 +71,2 @@ struct Renderer
+-  // Renders one block and returns the output sample time of the loudest sample in it,
+-  // or -1 when the block is silent.
++  // Returns the loudest left-channel sample time above 0.5, or -1 otherwise. The
++  // threshold distinguishes the unit impulse from the lower-level continuous input.
+@@ -66,0 +75,3 @@ struct Renderer
++    // A prefilled host buffer catches a restart path that marks silence but leaves stale data.
++    std::fill_n(left, kBlockFrames, 0.75f);
++    std::fill_n(right, kBlockFrames, -0.75f);
+@@ -78,0 +90,2 @@ struct Renderer
++    bool hasSignal = false;
++    const bool silent = (flags & kAudioUnitRenderAction_OutputIsSilence) != 0;
+@@ -81,0 +95,2 @@ struct Renderer
++      if (silent) require(left[i] == 0.0f && right[i] == 0.0f, "Silence flag with nonzero output");
++      hasSignal |= left[i] != 0.0f || right[i] != 0.0f;
+@@ -87,0 +103,2 @@ struct Renderer
++    if (silent) ++silenceBlocksChecked;
++    if (!silent && hasSignal) ++signalBlocks;
+@@ -139 +156 @@ static void requireDelay(int64_t delay, long expected, const char *message)
+-static void changeLatency(Renderer &renderer, int frames)
++static int changeLatency(Renderer &renderer, int frames)
+@@ -155,0 +173 @@ static void changeLatency(Renderer &renderer, int frames)
++  std::atomic<bool> renderReady{false};
+@@ -156,0 +175,3 @@ static void changeLatency(Renderer &renderer, int frames)
++  const int silenceBefore = renderer.silenceBlocksChecked;
++  const int signalBefore = renderer.signalBlocks;
++  gContinuousInput = true;
+@@ -162 +183,5 @@ static void changeLatency(Renderer &renderer, int frames)
+-          while (rendering) renderer.renderBlock();
++          while (rendering)
++          {
++            renderer.renderBlock();
++            if (renderer.signalBlocks > signalBefore) renderReady = true;
++          }
+@@ -166,0 +192 @@ static void changeLatency(Renderer &renderer, int frames)
++          renderReady = true;
+@@ -169,0 +196,5 @@ static void changeLatency(Renderer &renderer, int frames)
++  // Start the restart only after nonzero audio has flowed, so silence checks cannot
++  // pass merely because the render thread was never scheduled.
++  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
++  while (!renderReady && std::chrono::steady_clock::now() < deadline) std::this_thread::yield();
++
+@@ -171 +202 @@ static void changeLatency(Renderer &renderer, int frames)
+-  for (int i = 0; i < 100 && latencyFrames(renderer.unit) != frames; ++i)
++  for (int i = 0; renderReady && i < 100 && latencyFrames(renderer.unit) != frames; ++i)
+@@ -174,0 +206 @@ static void changeLatency(Renderer &renderer, int frames)
++  gContinuousInput = false;
+@@ -175,0 +208 @@ static void changeLatency(Renderer &renderer, int frames)
++  require(renderReady, "Concurrent renderer did not produce nonzero audio");
+@@ -178,0 +212 @@ static void changeLatency(Renderer &renderer, int frames)
++  return renderer.silenceBlocksChecked - silenceBefore;
+@@ -251,0 +286 @@ int main(int argc, char **argv)
++    int silenceBlocksChecked = 0;
+@@ -254 +289 @@ int main(int argc, char **argv)
+-      changeLatency(renderer, frames);
++      silenceBlocksChecked += changeLatency(renderer, frames);
+@@ -258,0 +294,4 @@ int main(int argc, char **argv)
++    if (silenceBlocksChecked > 0)
++      std::printf("PASS: %d silence-flagged blocks contained zero samples\n", silenceBlocksChecked);
++    else
++      std::printf("SKIP: no silence-flagged block was captured during restart\n");

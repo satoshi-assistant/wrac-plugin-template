@@ -3,6 +3,7 @@
 ## 対象と範囲
 
 - 検証対象は `c770b6a76b712779ab9553b108106ed80179ea7e` の WRAC Gain 0.1.0、release ビルド。
+- このブランチには AAX バイパスの原因と修正方法を確認するための変更を含む。修正は検証用であり、出荷判断や全ケースの検証完了を意味しない。
 - macOS 14.8.5、Apple Silicon、Xcode 15.2、AAX SDK 2.9.0。AU / VST3 は Apple Silicon と Rosetta / Intel のバイナリーも確認した。
 - この記録は実施した条件での結果を示す。全ホストや全サンプルレート、全バッファー長の正常動作を保証するものではない。
 - 小さな数値・検査結果を [evidence](evidence/wrac-gain-macos-2026-10-29/) に保存した。ホストのプロジェクト、音声、スクリーンショット、ホストの詳細ログ、個人を特定し得る環境情報は公開対象に含めていない。
@@ -28,7 +29,7 @@ GarageBand の [ゲイン・バイパスの数値](evidence/wrac-gain-macos-2026
 
 検証対象の AAX wrapper は master bypass ID として `MasterBypass` を登録する。一方、AAX SDK 2.9.0 の既定 `GetMasterBypassParameter` は `MasterBypassID` が登録されたときに同 ID を返す。SDK 実装を使った [独立検査](evidence/wrac-gain-macos-2026-10-29/aax-master-bypass-id-check.log) では、`MasterBypass` を登録した場合は空文字、`MasterBypassID` を登録した場合はその ID が返った。この不一致は有力な原因候補である。
 
-ID だけを変えた比較 AAX は作成したが、ホストへの挿入を完了できず、実 DAW での修正効果は未確認。上記の再生結果は全サンプルの波形比較ではない。[測定の記録](evidence/wrac-gain-macos-2026-10-29/aax-bypass-observation.txt)
+その後、wrapper が SDK の `cDefaultMasterBypassID` を使う検証用修正をビルドして同条件で再確認した。バイパス off → on → off でピークは −26.0 → −20.0 → −26.0 dBFS に変化し、再生中の切り替えでも同じ結果となった。on のとき、Effect Bypass と Parameter Bypass はともに On と表示された。明示的な CLAP bypass を持たないプラグインの fallback、オートメーション、状態復元は未確認。いずれも DAW のピーク表示による確認であり、全サンプルの波形比較ではない。[修正前](evidence/wrac-gain-macos-2026-10-29/aax-bypass-observation.txt)、[修正後](evidence/wrac-gain-macos-2026-10-29/aax-bypass-fixed-observation.txt)
 
 ### Ableton Live / AU：新規挿入直後のバイパス表示と処理の不一致
 
@@ -40,7 +41,7 @@ ID だけを変えた比較 AAX は作成したが、ホストへの挿入を完
 
 既存の再起動テストは遅延値の通知・適用を確認するが、並行 render が返す無音バッファーの内容を判定していない。追加の直接 AU 検査では非ゼロ入力と事前に非ゼロで埋めた出力を使って 60 回の遅延変更を実行した。無音フラグ付きブロックを Apple Silicon で 60 / 60 区間、Rosetta で 53 / 60 区間捕捉し、両チャンネルの全サンプルがゼロであることを確認した（[Apple Silicon](evidence/wrac-gain-macos-2026-10-29/au-restart-silence-arm64.log)、[Rosetta](evidence/wrac-gain-macos-2026-10-29/au-restart-silence-x86_64.log)）。
 
-この追加検査は恒久テストではない。また、各ブロックが activate / deactivate の瞬間と重なったことや、リアルタイムの期限を満たしたことは保証しない。既存の状態復元テストでは ClassInfo 通知が発生せず、並行復元分岐は SKIP した。
+この追加検査は恒久テストではない。既存テストに同じ検査を加える[実験用パッチ](evidence/wrac-gain-macos-2026-10-29/au-silence-test-experiment.patch)も試し、Apple Silicon と Rosetta の両方で成功した。パッチの適用には `git apply --unidiff-zero` を使う。意図的に出力を消去しない AU を使う負の対照では、非ゼロ出力を検出して失敗した（[結果](evidence/wrac-gain-macos-2026-10-29/au-silence-test-verification.txt)）。これらは、各ブロックが activate / deactivate の瞬間と重なったことや、リアルタイムの期限を満たしたことは保証しない。既存の状態復元テストでは ClassInfo 通知が発生せず、並行復元分岐は SKIP した。
 
 ### Pro Tools の挿入メニューで一度観測した例外
 
