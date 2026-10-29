@@ -1,0 +1,6 @@
+audio impulse: left=0 right=0 expected=0
+audio impulse: left=4096 right=4096 expected=4096
+audio impulse: left=4096 right=4096 expected=4096
+audio impulse: left=0 right=0 expected=0
+audio impulse: left=0 right=0 expected=0
+PASS: direct CLAP restart requests=2 latency-change callbacks=2

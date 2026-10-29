@@ -1,0 +1,6 @@
+REAPER offline renders: 44.1 kHz, 24-bit stereo PCM
+
+AU null: frames=573300, nonzero_samples=0, peak_24bit=0, peak_dBFS=-inf
+AU control: frames=573300, nonzero_samples=16814, peak_24bit=7482557, peak_dBFS=-0.99
+VST3 null: frames=573300, nonzero_samples=0, peak_24bit=0, peak_dBFS=-inf
+VST3 control: frames=573300, nonzero_samples=16814, peak_24bit=7482557, peak_dBFS=-0.99

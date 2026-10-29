@@ -1,0 +1,6 @@
+garageband-gain-minus6.wav frames 529200 rate 44100 channels 2 bits 24
+first nonzero >1: 46309 222709
+garageband-gain-latency4096.wav frames 529200 rate 44100 channels 2 bits 24
+first nonzero >1: 46309 222709
+channel 0 sample count equal: True max absolute difference 0 different samples 0
+channel 1 sample count equal: True max absolute difference 0 different samples 0

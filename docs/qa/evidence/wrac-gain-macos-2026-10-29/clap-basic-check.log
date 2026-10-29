@@ -1,0 +1,13 @@
+PASS 44100 Hz / 64 frames: stereo gain, sample offsets, bypass, state save/restore
+PASS 44100 Hz / 128 frames: stereo gain, sample offsets, bypass, state save/restore
+PASS 44100 Hz / 512 frames: stereo gain, sample offsets, bypass, state save/restore
+PASS 44100 Hz / 1024 frames: stereo gain, sample offsets, bypass, state save/restore
+PASS 48000 Hz / 64 frames: stereo gain, sample offsets, bypass, state save/restore
+PASS 48000 Hz / 128 frames: stereo gain, sample offsets, bypass, state save/restore
+PASS 48000 Hz / 512 frames: stereo gain, sample offsets, bypass, state save/restore
+PASS 48000 Hz / 1024 frames: stereo gain, sample offsets, bypass, state save/restore
+PASS 96000 Hz / 64 frames: stereo gain, sample offsets, bypass, state save/restore
+PASS 96000 Hz / 128 frames: stereo gain, sample offsets, bypass, state save/restore
+PASS 96000 Hz / 512 frames: stereo gain, sample offsets, bypass, state save/restore
+PASS 96000 Hz / 1024 frames: stereo gain, sample offsets, bypass, state save/restore
+PASS: all 12 direct CLAP cases

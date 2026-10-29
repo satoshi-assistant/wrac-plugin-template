@@ -1,0 +1,6 @@
+garageband-gain-minus6.wav frames 529200 rate 44100
+channel 0 least-squares output/input 0.501187293 peak24 42084
+channel 1 least-squares output/input 0.501187309 peak24 42084
+garageband-bypass.wav frames 529200 rate 44100
+channel 0 least-squares output/input 1.000000000 peak24 83968
+channel 1 least-squares output/input 1.000000000 peak24 83968

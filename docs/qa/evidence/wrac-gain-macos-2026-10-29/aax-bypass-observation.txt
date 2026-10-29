@@ -1,0 +1,12 @@
+Pro Tools Developer 23.6.0.5 / AAX Native / WRAC Gain 0.1.0
+Input: stereo, 1 kHz sine, -20.0 dBFS peak; gain: -6.0 dB
+The host peak display was reset before each playback.
+
+Plugin active, host bypass off: host peak -26.0 dBFS.
+Plugin active, host bypass on: host peak -26.0 dBFS.
+  Insert selector: bypassed; Effect Bypass: on; Parameter Bypass: Off.
+Plugin inactive, host bypass on: host peak -20.0 dBFS.
+Plugin active again, host bypass on: host peak -26.0 dBFS.
+
+These are rounded peak-meter observations, not exported sample comparisons.
+The ID-only comparison build was not inserted or tested in the DAW.

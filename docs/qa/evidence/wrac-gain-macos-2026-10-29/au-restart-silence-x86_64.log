@@ -1,0 +1,3 @@
+[clap-wrapper] auv2: Initialized 'com.your-company.wrac-gain' / 'WRAC Gain' / '0.1.0'
+render blocks=1673675, signal blocks=1671801, silence-flagged zero blocks=1754, restart intervals with flagged silence=53/60, mismatches=0, max render time=20113 us
+PASS: captured silence-flagged blocks are zero on both channels during restart intervals
