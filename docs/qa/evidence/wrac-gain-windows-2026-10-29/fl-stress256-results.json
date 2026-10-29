@@ -1,0 +1,242 @@
+[
+  {
+    "name": "stress256-01",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-02",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-03",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-04",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-05",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-06",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-07",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-08",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-09",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-10",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-11",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-12",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-13",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-14",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-15",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-16",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-17",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-18",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-19",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-20",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-21",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-22",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-23",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-24",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-25",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-26",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-27",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-28",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-29",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  },
+  {
+    "name": "stress256-30",
+    "exit_code": 0,
+    "output_exists": true,
+    "pcm_identical": true,
+    "plugin_log_present": true,
+    "latency_256_logged": false
+  }
+]

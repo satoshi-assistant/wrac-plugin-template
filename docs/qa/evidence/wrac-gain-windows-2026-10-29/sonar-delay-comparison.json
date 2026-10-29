@@ -1,0 +1,33 @@
+{
+  "baseline": "wrac-sonar-enabled.wav",
+  "sample_rate": 44100,
+  "channels": 2,
+  "frames": 88430,
+  "baseline_peak": 0.353118896484375,
+  "comparisons": {
+    "64": {
+      "file": "wrac-sonar-delay-64.wav",
+      "peak": 0.353118896484375,
+      "different_samples": 3826,
+      "max_abs_difference": 2.0000000072549875e-15
+    },
+    "256": {
+      "file": "wrac-sonar-delay-256.wav",
+      "peak": 0.353118896484375,
+      "different_samples": 9762,
+      "max_abs_difference": 2.0000000072549875e-15
+    },
+    "1024": {
+      "file": "wrac-sonar-delay-1024.wav",
+      "peak": 0.353118896484375,
+      "different_samples": 14322,
+      "max_abs_difference": 2.0000000072549875e-15
+    },
+    "4096": {
+      "file": "wrac-sonar-delay-4096.wav",
+      "peak": 0.353118896484375,
+      "different_samples": 13456,
+      "max_abs_difference": 2.0000000072549875e-15
+    }
+  }
+}

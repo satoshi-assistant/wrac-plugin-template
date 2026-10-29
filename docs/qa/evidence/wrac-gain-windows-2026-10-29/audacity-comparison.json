@@ -1,0 +1,28 @@
+{
+  "frames": 88430,
+  "peak_source": 11571,
+  "peak_output": 11573,
+  "max_abs_difference_lsb": 9,
+  "different_samples": 142444,
+  "samples_difference_over_2_lsb": 38187,
+  "unprocessed_16bit": {
+    "peak": 11571,
+    "max_abs_difference_lsb": 0,
+    "different_samples": 0,
+    "samples_difference_over_2_lsb": 0
+  },
+  "float_output": {
+    "format": [
+      3,
+      2,
+      44100,
+      352800,
+      8,
+      32
+    ],
+    "peak": 0.353118896484375,
+    "max_abs_difference": 0.0,
+    "different_samples": 0,
+    "samples_difference_over_one_16bit_lsb": 0
+  }
+}

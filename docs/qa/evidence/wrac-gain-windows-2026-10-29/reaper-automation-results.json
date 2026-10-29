@@ -1,0 +1,30 @@
+{
+  "vst": {
+    "before": {
+      "peak_base": 2962176,
+      "peak_automated": 1481088,
+      "max_abs_difference_lsb": 0.0,
+      "samples_difference_above_1_lsb": 0
+    },
+    "after": {
+      "peak_base": 2959360,
+      "peak_automated": 2959360,
+      "max_abs_difference_lsb": 0.0,
+      "samples_difference_above_1_lsb": 0
+    }
+  },
+  "clap": {
+    "before": {
+      "peak_base": 2962176,
+      "peak_automated": 1481088,
+      "max_abs_difference_lsb": 0.0,
+      "samples_difference_above_1_lsb": 0
+    },
+    "after": {
+      "peak_base": 2959360,
+      "peak_automated": 2959360,
+      "max_abs_difference_lsb": 0.0,
+      "samples_difference_above_1_lsb": 0
+    }
+  }
+}

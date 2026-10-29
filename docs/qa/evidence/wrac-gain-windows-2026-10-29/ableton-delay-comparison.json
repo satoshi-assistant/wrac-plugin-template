@@ -1,0 +1,36 @@
+{
+  "format": [
+    3,
+    2,
+    44100,
+    352800,
+    8,
+    32
+  ],
+  "frames": 352800,
+  "peak_delay_0": 0.89996337890625,
+  "peak_delay_4096": 0.89996337890625,
+  "different_samples": 0,
+  "max_abs_difference": 0.0,
+  "rms_difference": 0.0,
+  "peak_gain_half": 0.449981689453125,
+  "half_gain_max_difference": 0.0,
+  "half_gain_different_samples": 0,
+  "other_delays": {
+    "64": {
+      "peak": 0.89996337890625,
+      "different_samples": 0,
+      "max_abs_difference": 0.0
+    },
+    "256": {
+      "peak": 0.89996337890625,
+      "different_samples": 0,
+      "max_abs_difference": 0.0
+    },
+    "1024": {
+      "peak": 0.89996337890625,
+      "different_samples": 0,
+      "max_abs_difference": 0.0
+    }
+  }
+}

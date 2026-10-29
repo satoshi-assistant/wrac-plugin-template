@@ -1,0 +1,362 @@
+[
+  {
+    "format": "clap",
+    "sample_rate": 44100,
+    "block_size": 64,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 44100,
+    "block_size": 64,
+    "selected_delay": 4096,
+    "measured_delay": 4096,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 44100,
+    "block_size": 64,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 44100,
+    "block_size": 1024,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 44100,
+    "block_size": 1024,
+    "selected_delay": 4096,
+    "measured_delay": 4096,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 44100,
+    "block_size": 1024,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 48000,
+    "block_size": 64,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 48000,
+    "block_size": 64,
+    "selected_delay": 4096,
+    "measured_delay": 4096,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 48000,
+    "block_size": 64,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 48000,
+    "block_size": 1024,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 48000,
+    "block_size": 1024,
+    "selected_delay": 4096,
+    "measured_delay": 4096,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 48000,
+    "block_size": 1024,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 96000,
+    "block_size": 64,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 96000,
+    "block_size": 64,
+    "selected_delay": 4096,
+    "measured_delay": 4096,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 96000,
+    "block_size": 64,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 96000,
+    "block_size": 1024,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 96000,
+    "block_size": 1024,
+    "selected_delay": 4096,
+    "measured_delay": 4096,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "clap",
+    "sample_rate": 96000,
+    "block_size": 1024,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 44100,
+    "block_size": 64,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 44100,
+    "block_size": 64,
+    "selected_delay": 4096,
+    "measured_delay": 4096,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 44100,
+    "block_size": 64,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 44100,
+    "block_size": 1024,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 44100,
+    "block_size": 1024,
+    "selected_delay": 4096,
+    "measured_delay": 4096,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 44100,
+    "block_size": 1024,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 48000,
+    "block_size": 64,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 48000,
+    "block_size": 64,
+    "selected_delay": 4096,
+    "measured_delay": 4096,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 48000,
+    "block_size": 64,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 48000,
+    "block_size": 1024,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 48000,
+    "block_size": 1024,
+    "selected_delay": 4096,
+    "measured_delay": 4096,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 48000,
+    "block_size": 1024,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 96000,
+    "block_size": 64,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 96000,
+    "block_size": 64,
+    "selected_delay": 4096,
+    "measured_delay": 4096,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 96000,
+    "block_size": 64,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 96000,
+    "block_size": 1024,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 96000,
+    "block_size": 1024,
+    "selected_delay": 4096,
+    "measured_delay": 4096,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  },
+  {
+    "format": "vst3",
+    "sample_rate": 96000,
+    "block_size": 1024,
+    "selected_delay": 0,
+    "measured_delay": 0,
+    "impulse_count": 3,
+    "dropped_frames": 0,
+    "pass": true
+  }
+]

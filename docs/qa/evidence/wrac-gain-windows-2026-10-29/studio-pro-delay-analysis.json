@@ -1,0 +1,61 @@
+{
+  "sample_rate": 44100,
+  "frames": 352800,
+  "threshold": 1e-07,
+  "latencies": {
+    "256": {
+      "mismatch_frames": 352799,
+      "first_mismatch_frame": 1,
+      "last_mismatch_frame": 352799,
+      "first_delayed_nonzero_frame": 257,
+      "last_delayed_nonzero_frame": 352799,
+      "baseline_nonzero_delayed_zero_frames": 415,
+      "first_baseline_nonzero_delayed_zero": 1,
+      "last_baseline_nonzero_delayed_zero": 350851,
+      "offset_comparison": {
+        "-256": {
+          "frames": 352544,
+          "mismatch_frames": 352544,
+          "max_abs_difference": 0.18310546875
+        },
+        "0": {
+          "frames": 352800,
+          "mismatch_frames": 352799,
+          "max_abs_difference": 0.360931396484375
+        },
+        "256": {
+          "frames": 352544,
+          "mismatch_frames": 0,
+          "max_abs_difference": 0.0
+        }
+      }
+    },
+    "4096": {
+      "mismatch_frames": 352798,
+      "first_mismatch_frame": 1,
+      "last_mismatch_frame": 352799,
+      "first_delayed_nonzero_frame": 4097,
+      "last_delayed_nonzero_frame": 352799,
+      "baseline_nonzero_delayed_zero_frames": 4253,
+      "first_baseline_nonzero_delayed_zero": 1,
+      "last_baseline_nonzero_delayed_zero": 352486,
+      "offset_comparison": {
+        "-4096": {
+          "frames": 348704,
+          "mismatch_frames": 348702,
+          "max_abs_difference": 0.271453857421875
+        },
+        "0": {
+          "frames": 352800,
+          "mismatch_frames": 352798,
+          "max_abs_difference": 0.18310546875
+        },
+        "4096": {
+          "frames": 348704,
+          "mismatch_frames": 0,
+          "max_abs_difference": 0.0
+        }
+      }
+    }
+  }
+}

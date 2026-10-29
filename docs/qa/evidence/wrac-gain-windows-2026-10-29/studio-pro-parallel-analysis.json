@@ -1,0 +1,24 @@
+{
+  "studio-parallel-null-256.wav": {
+    "frames": 352800,
+    "channels": 2,
+    "max_abs_sample": 0.360931396484375,
+    "nonzero_samples": 705598
+  },
+  "studio-parallel-control-256.wav": {
+    "frames": 352800,
+    "channels": 2,
+    "max_abs_sample": 0.0,
+    "nonzero_samples": 0
+  },
+  "studio-parallel-no-plugin-256.wav": {
+    "frames": 352800,
+    "channels": 2,
+    "max_abs_sample": 0.360931396484375,
+    "nonzero_samples": 705598
+  },
+  "bypass_vs_no_plugin": {
+    "max_abs_difference": 0.0,
+    "mismatch_samples": 0
+  }
+}

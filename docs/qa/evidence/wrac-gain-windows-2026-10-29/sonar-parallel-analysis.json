@@ -1,0 +1,17 @@
+{
+  "parallel_64": {
+    "frames": 88430,
+    "peak": 1.0000000036274937e-15,
+    "nonzero_samples": 20286
+  },
+  "parallel_same_phase_control_64": {
+    "frames": 88430,
+    "peak": 0.70623779296875,
+    "nonzero_samples": 175502
+  },
+  "single_track_control_64": {
+    "frames": 88430,
+    "peak": 0.353118896484375,
+    "nonzero_samples": 175502
+  }
+}

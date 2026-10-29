@@ -1,0 +1,42 @@
+[
+  {
+    "delay_samples": 0,
+    "format": "_wave_params(nchannels=2, sampwidth=2, framerate=44100, nframes=88430, comptype='NONE', compname='not compressed')",
+    "baseline_pcm_sha256": "16842be6fd186989001cb64043082bd263fc393ce6f2d21a9e34c2a64237dd5c",
+    "render_pcm_sha256": "16842be6fd186989001cb64043082bd263fc393ce6f2d21a9e34c2a64237dd5c",
+    "bit_identical": true,
+    "host_log_confirmed": true
+  },
+  {
+    "delay_samples": 64,
+    "format": "_wave_params(nchannels=2, sampwidth=2, framerate=44100, nframes=88430, comptype='NONE', compname='not compressed')",
+    "baseline_pcm_sha256": "16842be6fd186989001cb64043082bd263fc393ce6f2d21a9e34c2a64237dd5c",
+    "render_pcm_sha256": "16842be6fd186989001cb64043082bd263fc393ce6f2d21a9e34c2a64237dd5c",
+    "bit_identical": true,
+    "host_log_confirmed": true
+  },
+  {
+    "delay_samples": 256,
+    "format": "_wave_params(nchannels=2, sampwidth=2, framerate=44100, nframes=88430, comptype='NONE', compname='not compressed')",
+    "baseline_pcm_sha256": "16842be6fd186989001cb64043082bd263fc393ce6f2d21a9e34c2a64237dd5c",
+    "render_pcm_sha256": "364d0018abc59a92e110ae13cd09b5d9ae901a497e9f43c78c7fdc7e3fdca9f7",
+    "bit_identical": false,
+    "host_log_confirmed": true
+  },
+  {
+    "delay_samples": 1024,
+    "format": "_wave_params(nchannels=2, sampwidth=2, framerate=44100, nframes=88430, comptype='NONE', compname='not compressed')",
+    "baseline_pcm_sha256": "16842be6fd186989001cb64043082bd263fc393ce6f2d21a9e34c2a64237dd5c",
+    "render_pcm_sha256": "16842be6fd186989001cb64043082bd263fc393ce6f2d21a9e34c2a64237dd5c",
+    "bit_identical": true,
+    "host_log_confirmed": true
+  },
+  {
+    "delay_samples": 4096,
+    "format": "_wave_params(nchannels=2, sampwidth=2, framerate=44100, nframes=88430, comptype='NONE', compname='not compressed')",
+    "baseline_pcm_sha256": "16842be6fd186989001cb64043082bd263fc393ce6f2d21a9e34c2a64237dd5c",
+    "render_pcm_sha256": "16842be6fd186989001cb64043082bd263fc393ce6f2d21a9e34c2a64237dd5c",
+    "bit_identical": true,
+    "host_log_confirmed": true
+  }
+]

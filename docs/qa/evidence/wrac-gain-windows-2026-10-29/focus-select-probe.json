@@ -1,0 +1,24 @@
+{
+  "description": "Source-level event simulation; does not prove which events WebView2 delivers to a real select popup.",
+  "scenarios": [
+    {
+      "tagName": "SELECT",
+      "event": "pointerup",
+      "calls": [
+        "focus_host_window"
+      ]
+    },
+    {
+      "tagName": "SELECT",
+      "event": "change",
+      "calls": [
+        "focus_host_window"
+      ]
+    },
+    {
+      "tagName": "INPUT",
+      "event": "pointerup",
+      "calls": []
+    }
+  ]
+}
