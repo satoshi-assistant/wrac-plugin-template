@@ -1,0 +1,95 @@
+{
+  "host": "REAPER 7.82, Windows 11, stopped, Dummy Audio 44.1 kHz",
+  "method": "Temporary test frontend invokes the production set_latency command through wxp in the sequence 0, 64, 64, 256. ReaScript polls host PDC, saved state and IsProjectDirty, saves and reopens the test project.",
+  "production_binary_contains_temporary_probe": false,
+  "formats": {
+    "VST3": {
+      "initial": {
+        "seconds": 0.117,
+        "phase": "initial",
+        "dirty": 0,
+        "pdc": 0,
+        "latency": 0
+      },
+      "changed_to_64_before_save": {
+        "seconds": 9.884,
+        "phase": "before_save_64",
+        "dirty": 1,
+        "pdc": 64,
+        "latency": 64
+      },
+      "after_save_and_same_64_reselection": {
+        "first_seconds": 10.134,
+        "last_seconds": 16.375,
+        "samples": 25,
+        "all_clean": true,
+        "pdc": 64
+      },
+      "changed_to_256_before_save": {
+        "seconds": 17.661,
+        "phase": "before_save_256",
+        "dirty": 1,
+        "pdc": 256,
+        "latency": 256
+      },
+      "saved_256": {
+        "seconds": 18.7,
+        "phase": "after_save_256",
+        "dirty": 0,
+        "pdc": 256,
+        "latency": 256
+      },
+      "reopened_256": {
+        "seconds": 20.85,
+        "phase": "after_reopen",
+        "dirty": 0,
+        "pdc": 256,
+        "latency": 256
+      }
+    },
+    "CLAP": {
+      "initial": {
+        "seconds": 0.124,
+        "phase": "initial",
+        "dirty": 0,
+        "pdc": 0,
+        "latency": 0
+      },
+      "changed_to_64_before_save": {
+        "seconds": 9.814,
+        "phase": "before_save_64",
+        "dirty": 1,
+        "pdc": 64,
+        "latency": 64
+      },
+      "after_save_and_same_64_reselection": {
+        "first_seconds": 10.094,
+        "last_seconds": 16.493,
+        "samples": 26,
+        "all_clean": true,
+        "pdc": 64
+      },
+      "changed_to_256_before_save": {
+        "seconds": 17.842,
+        "phase": "before_save_256",
+        "dirty": 1,
+        "pdc": 256,
+        "latency": 256
+      },
+      "saved_256": {
+        "seconds": 18.895,
+        "phase": "after_save_256",
+        "dirty": 0,
+        "pdc": 256,
+        "latency": 256
+      },
+      "reopened_256": {
+        "seconds": 21.05,
+        "phase": "after_reopen",
+        "dirty": 0,
+        "pdc": 256,
+        "latency": 256
+      }
+    }
+  }
+}
